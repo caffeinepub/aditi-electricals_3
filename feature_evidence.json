@@ -1,0 +1,75 @@
+{
+  "kind": "feature_evidence_report",
+  "features": [
+    {
+      "featureId": "feature-fix-the-frontend-login-and-auth-context-so-that-when-owner001-logs-in-the-stored-role-is-exactly-owner-not-admin-or-any-other-string-and-all-downstream-role-checks-in-the-frontend-use-owner-as-the-owner-role-identifier-consistently",
+      "featureTitle": "Fix the frontend login and auth context so that when OWNER001 logs in, the stored role is exactly 'owner' (not 'admin' or any other string), and all downstream role checks in the frontend use 'owner' as the owner role identifier consistently.",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/components/layout/Header.tsx",
+        "frontend/src/contexts/AuthContext.tsx",
+        "frontend/src/pages/Login.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-13"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-restore-a-clean-light-blue-and-white-visual-theme-across-the-entire-app-replace-any-dark-blue-gradients-heavy-dark-backgrounds-or-dark-themed-elements-with-header-background-using-solid-light-blue-e3f2fd-to-1565c0-range-no-dark-gradient-page-background-white-ffffff-cards-white-with-a-soft-subtle-box-shadow-clean-spacing-and-modern-minimal-typography-remove-all-dark-gradient-backgrounds-from-headers-sidebars-and-navigation-the-overall-feel-must-be-light-airy-and-minimal",
+      "featureTitle": "Restore a clean light blue and white visual theme across the entire app. Replace any dark blue gradients, heavy dark backgrounds, or dark-themed elements with: Header background using solid light blue (#E3F2FD to #1565C0 range, no dark gradient), page background white (#FFFFFF), cards white with a soft subtle box-shadow, clean spacing and modern minimal typography. Remove all dark gradient backgrounds from headers, sidebars, and navigation. The overall feel must be light, airy, and minimal.",
+      "files": [
+        "frontend/src/components/layout/Header.tsx",
+        "frontend/src/index.css",
+        "frontend/src/pages/owner/AttendanceManagement.tsx",
+        "frontend/src/pages/owner/OwnerDashboard.tsx",
+        "frontend/src/pages/owner/SalaryManagement.tsx",
+        "frontend/src/pages/owner/WorkerDetail.tsx",
+        "frontend/src/pages/owner/WorkerManagement.tsx",
+        "frontend/src/pages/worker/WorkerDashboard.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-14"
+      ],
+      "confidence": "high"
+    },
+    {
+      "featureId": "feature-remove-the-image-logo-and-any-logo-icon-placeholder-icon-or-circular-logo-element-from-the-app-header-completely-the-header-must-display-only-the-plain-text-aditi-electricals-centered-or-left-aligned-with-no-image-no-icon-no-round-circle-and-no-logo-component-of-any-kind",
+      "featureTitle": "Remove the image logo (and any logo icon, placeholder icon, or circular logo element) from the app header completely. The header must display only the plain text 'Aditi Electricals' — centered or left-aligned — with no image, no icon, no round circle, and no logo component of any kind.",
+      "files": [
+        "frontend/src/components/layout/Header.tsx"
+      ],
+      "components": [
+        "authorization@4.0.0",
+        "blob-storage@4.0.0",
+        "core-infrastructure@1.0.2",
+        "shadcn-ui@1.0.0",
+        "build-template-react@1.0.0",
+        "initial-app@1.0.0",
+        "github-export-icp-cli@1.0.0"
+      ],
+      "testIds": [
+        "REQ-15"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

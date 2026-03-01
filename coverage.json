@@ -1,0 +1,112 @@
+{
+  "kind": "coverage_report",
+  "version": "1.0",
+  "generatedAt": "2026-02-28T10:43:27.212Z",
+  "sources": {
+    "buildRequest": true,
+    "implementationPlan": true
+  },
+  "requirements": {
+    "total": 4,
+    "implemented": 3,
+    "items": [
+      {
+        "id": "REQ-12",
+        "summary": "Fix the owner role authorization bug in the backend. All authorization checks that currently use `role === \"admin\"` must be changed to `role === \"owner\"`. The system must recognize OWNER001 as the owner and grant full super-admin access. Any middleware, guard, or access-control check that blocks owner operations (Add Worker, Edit Worker, Delete Worker, Change PIN, Modify Salary, Edit Attendance, and all protected APIs) must use the 'owner' role string exclusively. There must be no separate 'admin' role anywhere in the codebase.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-13",
+        "summary": "Fix the frontend login and auth context so that when OWNER001 logs in, the stored role is exactly 'owner' (not 'admin' or any other string), and all downstream role checks in the frontend use 'owner' as the owner role identifier consistently.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/pages/Login.tsx",
+          "frontend/src/contexts/AuthContext.tsx",
+          "frontend/src/App.tsx",
+          "frontend/src/components/layout/Header.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/pages/Login.tsx",
+          "frontend/src/contexts/AuthContext.tsx",
+          "frontend/src/App.tsx",
+          "frontend/src/components/layout/Header.tsx"
+        ]
+      },
+      {
+        "id": "REQ-14",
+        "summary": "Restore a clean light blue and white visual theme across the entire app. Replace any dark blue gradients, heavy dark backgrounds, or dark-themed elements with: Header background using solid light blue (#E3F2FD to #1565C0 range, no dark gradient), page background white (#FFFFFF), cards white with a soft subtle box-shadow, clean spacing and modern minimal typography. Remove all dark gradient backgrounds from headers, sidebars, and navigation. The overall feel must be light, airy, and minimal.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/index.css",
+          "frontend/src/components/layout/Header.tsx",
+          "frontend/src/pages/owner/OwnerDashboard.tsx",
+          "frontend/src/pages/owner/WorkerManagement.tsx",
+          "frontend/src/pages/owner/AttendanceManagement.tsx",
+          "frontend/src/pages/owner/SalaryManagement.tsx",
+          "frontend/src/pages/owner/WorkerDetail.tsx",
+          "frontend/src/pages/owner/OwnerNotes.tsx",
+          "frontend/src/pages/worker/WorkerDashboard.tsx",
+          "frontend/src/pages/worker/WorkerAttendance.tsx",
+          "frontend/src/pages/worker/WorkerSalary.tsx",
+          "frontend/src/pages/worker/WorkerNotes.tsx",
+          "frontend/src/components/AttendanceCalendar.tsx",
+          "frontend/src/components/notes/NoteCard.tsx",
+          "frontend/src/components/salary/SalaryBreakdownCard.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/index.css",
+          "frontend/src/components/layout/Header.tsx",
+          "frontend/src/pages/owner/OwnerDashboard.tsx",
+          "frontend/src/pages/owner/WorkerManagement.tsx",
+          "frontend/src/pages/owner/AttendanceManagement.tsx",
+          "frontend/src/pages/owner/SalaryManagement.tsx",
+          "frontend/src/pages/owner/WorkerDetail.tsx",
+          "frontend/src/pages/worker/WorkerDashboard.tsx"
+        ]
+      },
+      {
+        "id": "REQ-15",
+        "summary": "Remove the image logo (and any logo icon, placeholder icon, or circular logo element) from the app header completely. The header must display only the plain text 'Aditi Electricals' — centered or left-aligned — with no image, no icon, no round circle, and no logo component of any kind.",
+        "status": "implemented",
+        "plannedFiles": [
+          "frontend/src/components/layout/Header.tsx"
+        ],
+        "matchedFiles": [
+          "frontend/src/components/layout/Header.tsx"
+        ]
+      }
+    ]
+  },
+  "changedFiles": [
+    "backend/main.mo",
+    "backend/migration.mo",
+    "build-request.json",
+    "build-template/README.md",
+    "feature_evidence.json",
+    "frontend-file-summaries.txt",
+    "frontend-implementation-plan.json",
+    "frontend/src/App.tsx",
+    "frontend/src/components/PINChangeModal.tsx",
+    "frontend/src/components/layout/Header.tsx",
+    "frontend/src/components/notes/AddNoteModal.tsx",
+    "frontend/src/components/notes/EditNoteModal.tsx",
+    "frontend/src/components/worker/TwoPMConfirmationPopup.tsx",
+    "frontend/src/contexts/AuthContext.tsx",
+    "frontend/src/hooks/useQueries.ts",
+    "frontend/src/index.css",
+    "frontend/src/pages/Login.tsx",
+    "frontend/src/pages/owner/AttendanceManagement.tsx",
+    "frontend/src/pages/owner/OwnerDashboard.tsx",
+    "frontend/src/pages/owner/SalaryManagement.tsx",
+    "frontend/src/pages/owner/WorkerDetail.tsx",
+    "frontend/src/pages/owner/WorkerManagement.tsx",
+    "frontend/src/pages/worker/WorkerDashboard.tsx",
+    "frontend/tailwind.config.js",
+    "project_state.json",
+    "scratch/component-selection.json",
+    "spec.md",
+    "spec_vs_diff_report.json"
+  ]
+}

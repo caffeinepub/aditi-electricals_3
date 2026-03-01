@@ -1,0 +1,145 @@
+{
+  "kind": "implementation_plan",
+  "version": "1.0",
+  "title": "Fix Owner Role Recognition Bug + Restore Clean Light Blue/White UI + Remove Logo",
+  "requirements": [
+    {
+      "id": "REQ-13",
+      "summary": "Fix frontend login and auth context to consistently use 'owner' role for OWNER001",
+      "acceptanceCriteria": [
+        "After OWNER001 login, sessionStorage stores role='owner'",
+        "Owner Dashboard loads immediately after login with no redirect or auth error",
+        "All owner-only UI elements (Add Worker, Edit Worker, etc.) are visible and functional",
+        "No part of the frontend references or checks for role 'admin'"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/pages/Login.tsx",
+          "operation": "modify",
+          "description": "Update the login logic for OWNER001 to explicitly set role to 'owner' (not 'admin') when authenticating. Ensure the role is consistently 'owner' in the login success flow and stored correctly in sessionStorage via the AuthContext login function."
+        },
+        {
+          "path": "frontend/src/contexts/AuthContext.tsx",
+          "operation": "modify",
+          "description": "Review and ensure the login function stores exactly 'owner' as the role string for owner users. Remove any references to 'admin' role. Ensure sessionStorage persistence uses 'owner' consistently."
+        },
+        {
+          "path": "frontend/src/App.tsx",
+          "operation": "modify",
+          "description": "Update any role-based conditional rendering or route logic to check for role === 'owner' instead of 'admin'. Ensure the owner dashboard is displayed when the role is 'owner'."
+        },
+        {
+          "path": "frontend/src/components/layout/Header.tsx",
+          "operation": "modify",
+          "description": "Replace any role checks for 'admin' with 'owner'. Ensure owner-specific navigation links and menu items are visible when role === 'owner'."
+        }
+      ]
+    },
+    {
+      "id": "REQ-14",
+      "summary": "Restore clean light blue and white visual theme across the entire app",
+      "acceptanceCriteria": [
+        "App header uses a light blue color (no dark gradient)",
+        "All page backgrounds are white",
+        "All cards have white background with a subtle shadow",
+        "No dark gradient appears anywhere in the UI",
+        "Typography is clean and readable on white/light backgrounds",
+        "Layout remains responsive for mobile and desktop"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/index.css",
+          "operation": "modify",
+          "description": "Replace the current OKLCH-based design tokens with a clean light blue and white theme. Set --background to white (#FFFFFF), update --card to white with subtle border, and define light blue shades for primary colors (e.g., #E3F2FD to #1565C0 range). Remove any dark gradient color variables. Ensure all color tokens support a light, airy, minimal aesthetic."
+        },
+        {
+          "path": "frontend/src/components/layout/Header.tsx",
+          "operation": "modify",
+          "description": "Update the header styling to use a solid light blue background (from the #E3F2FD to #1565C0 range) instead of any dark blue gradient. Remove dark gradient classes from the header element. Ensure text and icons are readable on the light blue background."
+        },
+        {
+          "path": "frontend/src/pages/owner/OwnerDashboard.tsx",
+          "operation": "modify",
+          "description": "Update card components to use white background with soft subtle box-shadow. Remove any dark gradient or heavy dark background classes. Ensure spacing is clean and modern."
+        },
+        {
+          "path": "frontend/src/pages/owner/WorkerManagement.tsx",
+          "operation": "modify",
+          "description": "Update worker list and card styling to white backgrounds with subtle shadows. Remove dark gradients. Ensure clean spacing and minimal design."
+        },
+        {
+          "path": "frontend/src/pages/owner/AttendanceManagement.tsx",
+          "operation": "modify",
+          "description": "Update attendance calendar and card backgrounds to white with subtle shadows. Remove any dark gradient styling. Maintain calendar color-coded status indicators with clean presentation."
+        },
+        {
+          "path": "frontend/src/pages/owner/SalaryManagement.tsx",
+          "operation": "modify",
+          "description": "Update salary form and card backgrounds to white with subtle shadows. Remove dark gradients. Ensure input fields and breakdown displays are clean and readable."
+        },
+        {
+          "path": "frontend/src/pages/owner/WorkerDetail.tsx",
+          "operation": "modify",
+          "description": "Update worker detail page sections (attendance calendar, notes, salary) to use white card backgrounds with subtle shadows. Remove dark gradients from headers or tabs."
+        },
+        {
+          "path": "frontend/src/pages/owner/OwnerNotes.tsx",
+          "operation": "modify",
+          "description": "Update notes page layout and note cards to white backgrounds with subtle shadows. Remove any dark gradient styling from headers or filter sections."
+        },
+        {
+          "path": "frontend/src/pages/worker/WorkerDashboard.tsx",
+          "operation": "modify",
+          "description": "Update worker dashboard cards (attendance status, salary summary, announcements) to white backgrounds with subtle shadows. Remove dark gradients."
+        },
+        {
+          "path": "frontend/src/pages/worker/WorkerAttendance.tsx",
+          "operation": "modify",
+          "description": "Update attendance page and calendar to white card backgrounds with subtle shadows. Remove dark gradients."
+        },
+        {
+          "path": "frontend/src/pages/worker/WorkerSalary.tsx",
+          "operation": "modify",
+          "description": "Update salary breakdown display to white background with subtle shadow. Remove dark gradients."
+        },
+        {
+          "path": "frontend/src/pages/worker/WorkerNotes.tsx",
+          "operation": "modify",
+          "description": "Update notes tabs and note cards to white backgrounds with subtle shadows. Remove dark gradients."
+        },
+        {
+          "path": "frontend/src/components/AttendanceCalendar.tsx",
+          "operation": "modify",
+          "description": "Update calendar grid and date cells to use white background with subtle shadows. Maintain color-coded status indicators but ensure they work well on a light background. Remove any dark gradient styling."
+        },
+        {
+          "path": "frontend/src/components/notes/NoteCard.tsx",
+          "operation": "modify",
+          "description": "Update note card styling to white background with a soft subtle box-shadow. Remove dark gradients. Ensure type badges and text are readable on the light background."
+        },
+        {
+          "path": "frontend/src/components/salary/SalaryBreakdownCard.tsx",
+          "operation": "modify",
+          "description": "Update salary breakdown card to white background with subtle shadow. Remove dark gradients. Ensure table rows and highlighted items are clean and readable."
+        }
+      ]
+    },
+    {
+      "id": "REQ-15",
+      "summary": "Remove the image logo from the app header completely",
+      "acceptanceCriteria": [
+        "No image, icon, or SVG logo appears in the header",
+        "Header shows the text 'Aditi Electricals' as the sole brand identifier",
+        "Text is clean, readable, and styled consistently with the light blue theme",
+        "No broken image placeholders or empty logo containers are visible"
+      ],
+      "file_operations": [
+        {
+          "path": "frontend/src/components/layout/Header.tsx",
+          "operation": "modify",
+          "description": "Remove any logo image element, icon, SVG, or placeholder from the header. Display only the plain text 'Aditi Electricals' as the brand identifier, centered or left-aligned. Ensure the text is styled cleanly and consistently with the light blue theme. Remove any <img>, <Icon>, or circular logo container elements."
+        }
+      ]
+    }
+  ]
+}
