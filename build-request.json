@@ -1,111 +1,80 @@
 {
   "kind": "build_request",
-  "title": "Fix Owner Role Recognition Bug + Restore Clean Light Blue/White UI + Remove Logo",
+  "title": "Fix backend owner authorization — role validation rejecting valid Owner principal",
   "projectName": "Aditi Electricals",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-12",
-      "text": "Fix the owner role authorization bug in the backend. All authorization checks that currently use `role === \"admin\"` must be changed to `role === \"owner\"`. The system must recognize OWNER001 as the owner and grant full super-admin access. Any middleware, guard, or access-control check that blocks owner operations (Add Worker, Edit Worker, Delete Worker, Change PIN, Modify Salary, Edit Attendance, and all protected APIs) must use the 'owner' role string exclusively. There must be no separate 'admin' role anywhere in the codebase.",
+      "id": "REQ-1",
+      "text": "Fix the backend owner role validation logic in backend/main.mo so that the authenticated Internet Identity principal stored as the owner at initialization is correctly compared against the caller principal in all protected functions (addWorker, addHoliday, markAttendance, and any other owner-gated calls). The comparison must use structural principal equality, not string coercion or any other indirect method that could silently fail.",
       "target": "backend",
       "source": {
         "messageIds": [
-          "msg-3"
+          "msg-6"
         ],
         "quotes": [
-          "Error: \"Unauthorized: Only the owner can add workers\"",
-          "Change from: role === \"admin\" To: role === \"owner\"",
-          "Owner must have full access to: Add Worker, Edit Worker, Delete Worker, Change PIN, Modify Salary, Edit Attendance, Access all protected APIs",
-          "Remove any separate admin restriction. Owner = Super Admin."
+          "backend rejects every protected action with: 'Unauthorized: Only the owner can add workers'",
+          "Fix role-based middleware so Owner role is recognized.",
+          "Remove any incorrect hardcoded role checks."
         ]
       },
       "acceptanceCriteria": [
-        "Logging in as OWNER001 with PIN 1234 produces no 'Unauthorized' error",
-        "Owner can successfully add a new worker without any authorization error",
-        "Owner can edit, delete workers and change PINs without errors",
-        "No reference to role 'admin' exists in any authorization check",
-        "All protected backend calls succeed when called with the owner role"
+        "The owner principal captured at canister initialization (or first-time setup) is persisted in stable storage.",
+        "All protected functions compare msg.caller directly to the stored owner principal using Principal.equal or equivalent.",
+        "No hardcoded principal literals or string-based role checks remain in the authorization path.",
+        "Calling addWorker, addHoliday, and markAttendance as the Owner principal succeeds without an Unauthorized error."
       ]
     },
     {
-      "id": "REQ-13",
-      "text": "Fix the frontend login and auth context so that when OWNER001 logs in, the stored role is exactly 'owner' (not 'admin' or any other string), and all downstream role checks in the frontend use 'owner' as the owner role identifier consistently.",
-      "target": "frontend",
+      "id": "REQ-2",
+      "text": "Audit and fix the owner initialization flow in backend/main.mo to ensure the owner principal is correctly recorded when the canister is first set up. If the owner principal is stored via a setup/register call, verify that it is written to stable storage and survives canister upgrades. If it was never written (null/unset), add a safe re-initialization path that allows the current authenticated caller to claim ownership when no owner is set.",
+      "target": "backend",
       "source": {
         "messageIds": [
-          "msg-3"
+          "msg-6"
         ],
         "quotes": [
-          "if (user.id === \"OWNER001\") { user.role = \"owner\" }",
-          "This is ROLE MAPPING issue.",
-          "This is SINGLE OWNER SYSTEM. There is NO separate admin role."
+          "Ensure Owner account is correctly created in database.",
+          "Ensure login session persists correctly."
         ]
       },
       "acceptanceCriteria": [
-        "After OWNER001 login, sessionStorage stores role='owner'",
-        "Owner Dashboard loads immediately after login with no redirect or auth error",
-        "All owner-only UI elements (Add Worker, Edit Worker, etc.) are visible and functional",
-        "No part of the frontend references or checks for role 'admin'"
+        "Owner principal is stored in a stable variable so it persists across upgrades.",
+        "If the stored owner principal is unset (null), the first authenticated caller can claim the owner role.",
+        "Subsequent calls to claim ownership are rejected once an owner is already recorded.",
+        "The owner principal is never reset to null by a canister upgrade."
       ]
     },
     {
-      "id": "REQ-14",
-      "text": "Restore a clean light blue and white visual theme across the entire app. Replace any dark blue gradients, heavy dark backgrounds, or dark-themed elements with: Header background using solid light blue (#E3F2FD to #1565C0 range, no dark gradient), page background white (#FFFFFF), cards white with a soft subtle box-shadow, clean spacing and modern minimal typography. Remove all dark gradient backgrounds from headers, sidebars, and navigation. The overall feel must be light, airy, and minimal.",
+      "id": "REQ-3",
+      "text": "Verify that the frontend actor hook (useActor.ts / useQueries.ts) always constructs the backend actor with the authenticated Internet Identity agent, so that msg.caller on the backend receives the real owner principal and not the anonymous principal. If any mutation call (addWorker, addHoliday, attendance mark) is invoked before the actor is fully initialized with the identity, add a guard that waits for actor readiness before dispatching the call.",
       "target": "frontend",
       "source": {
         "messageIds": [
-          "msg-3"
+          "msg-6"
         ],
         "quotes": [
-          "Current UI dark blue heavy look aahe.",
-          "Header: Light Blue, Background: White, Cards: White with soft shadow, Clean spacing, Modern minimal UI, No dark gradient"
+          "Ensure JWT / session token is passed in all API requests."
         ]
       },
       "acceptanceCriteria": [
-        "App header uses a light blue color (no dark gradient)",
-        "All page backgrounds are white",
-        "All cards have white background with a subtle shadow",
-        "No dark gradient appears anywhere in the UI",
-        "Typography is clean and readable on white/light backgrounds",
-        "Layout remains responsive for mobile and desktop"
-      ]
-    },
-    {
-      "id": "REQ-15",
-      "text": "Remove the image logo (and any logo icon, placeholder icon, or circular logo element) from the app header completely. The header must display only the plain text 'Aditi Electricals' — centered or left-aligned — with no image, no icon, no round circle, and no logo component of any kind.",
-      "target": "frontend",
-      "source": {
-        "messageIds": [
-          "msg-3"
-        ],
-        "quotes": [
-          "Remove image logo completely.",
-          "Header should display ONLY: Aditi Electricals",
-          "No placeholder icon. No generated logo. No round logo circle. Just clean text title."
-        ]
-      },
-      "acceptanceCriteria": [
-        "No image, icon, or SVG logo appears in the header",
-        "Header shows the text 'Aditi Electricals' as the sole brand identifier",
-        "Text is clean, readable, and styled consistently with the light blue theme",
-        "No broken image placeholders or empty logo containers are visible"
+        "The actor used in all mutation hooks is initialized with the authenticated Internet Identity agent, not an anonymous agent.",
+        "No mutation is dispatched while the actor is in an uninitialized or anonymous state.",
+        "The principal logged client-side for the actor matches the owner principal stored in the backend."
       ]
     }
   ],
   "constraints": [
-    "Do NOT change attendance logic, salary logic, or notes logic",
-    "Do NOT change role separation between owner and worker",
-    "Do NOT change dashboard structure or page routing",
-    "Do NOT modify files listed in frontend.immutablePaths",
-    "Backend must remain a single Motoko actor in backend/main.mo"
+    "Do not regenerate or redesign the application.",
+    "Do not change any UI layout, styling, or features.",
+    "Do not alter any immutable frontend paths (useActor.ts, useInternetIdentity.ts, main.tsx, ui components).",
+    "Scope all changes strictly to the authorization/role-validation logic."
   ],
   "nonGoals": [
-    "Adding new features or pages",
-    "Changing the attendance time window or calendar color coding",
-    "Modifying salary calculation formulas",
-    "Changing notes tabs or note type logic",
-    "Modifying PWA manifest or service worker logic",
-    "Redesigning the overall layout structure"
+    "UI redesign or visual changes of any kind.",
+    "Adding new features or pages.",
+    "Changing the data model beyond what is required to persist the owner principal correctly.",
+    "Modifying worker login or PIN authentication flows."
   ],
   "imageRequirements": {
     "required": [],

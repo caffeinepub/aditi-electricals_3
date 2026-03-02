@@ -1,180 +1,261 @@
 import React from 'react';
-import { useGetAllWorkers, useGetConfirmationsByDate, useGetAllSalaryRecords } from '../../hooks/useQueries';
-import { useActor } from '../../hooks/useActor';
-import { useQuery } from '@tanstack/react-query';
-import { AttendanceRecord, Worker } from '../../backend';
-import { getTodayDateString, getCurrentMonthYear } from '../../utils/dateUtils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Users, UserCheck, UserX, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useGetAllWorkers, useGetTodayAttendanceAll, useGetConfirmationsByDate } from '../../hooks/useQueries';
+import { getTodayString, formatDate } from '../../utils/dateUtils';
+import TodayAttendanceMap from '../../components/owner/TodayAttendanceMap';
+import { AttendanceStatus, type AttendanceRecord, type Worker } from '../../backend';
 
-function useTodayAttendance(workers: Worker[]) {
-  const { actor, isFetching } = useActor();
-  const today = getTodayDateString();
-  return useQuery<AttendanceRecord[]>({
-    queryKey: ['today-attendance', today],
-    queryFn: async () => {
-      if (!actor || !workers.length) return [];
-      const results = await Promise.all(
-        workers.map(w => actor.getAttendanceByDate(w.workerId, today).catch(() => null))
-      );
-      return results.filter(Boolean) as AttendanceRecord[];
-    },
-    enabled: !!actor && !isFetching && workers.length > 0,
-    refetchInterval: 30000,
-  });
+interface OwnerDashboardProps {
+  onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
-export default function OwnerDashboard({ onNavigate }: { onNavigate: (page: string, params?: { workerId?: string }) => void }) {
-  const today = getTodayDateString();
-  const { month, year } = getCurrentMonthYear();
+export default function OwnerDashboard({ onNavigate }: OwnerDashboardProps) {
+  const { user } = useAuth();
+  const today = getTodayString();
 
   const { data: workers = [], isLoading: workersLoading } = useGetAllWorkers();
-  const { data: todayAttendance = [], isLoading: attLoading } = useTodayAttendance(workers);
-  const { data: confirmations = [] } = useGetConfirmationsByDate(today);
-  const { data: salaryRecords = [] } = useGetAllSalaryRecords();
+  // useGetTodayAttendanceAll returns AttendanceRecord[] (flat list of today's records)
+  const { data: todayAttendance = [], isLoading: attendanceLoading } = useGetTodayAttendanceAll();
+  const { data: confirmations = [], isLoading: confirmationsLoading } = useGetConfirmationsByDate(today);
 
-  const activeWorkers = workers.filter(w => w.active);
+  const activeWorkers = workers.filter((w) => w.active);
 
-  const presentIds = new Set(
-    todayAttendance.filter(r => (r.status as unknown as string) === 'present').map(r => r.workerId)
-  );
-  const absentWorkers = activeWorkers.filter(w => !presentIds.has(w.workerId));
-  const presentWorkers = activeWorkers.filter(w => presentIds.has(w.workerId));
-
-  const currentMonthSalaries = salaryRecords.filter(
-    s => Number(s.month) === month && Number(s.year) === year
+  // Workers who have a present record today
+  const presentRecords = todayAttendance.filter(
+    (r) => r.status === AttendanceStatus.present
   );
 
-  const isLoading = workersLoading || attLoading;
+  // Enrich present records with worker info
+  const presentWorkers: Array<{ worker: Worker; record: AttendanceRecord }> = presentRecords
+    .map((record) => {
+      const worker = workers.find((w) => w.workerId === record.workerId);
+      return worker ? { worker, record } : null;
+    })
+    .filter((x): x is { worker: Worker; record: AttendanceRecord } => x !== null);
+
+  // Workers who have NO attendance record today
+  const absentWorkers = activeWorkers.filter(
+    (w) => !todayAttendance.find((r) => r.workerId === w.workerId)
+  );
+
+  const confirmedWorkers = confirmations.filter((c) => c.confirmed);
+
+  // Build attendance data with worker info for map (records that have GPS)
+  const attendanceWithWorkers = presentWorkers.filter(
+    (d) => d.record.latitude != null && d.record.longitude != null
+  );
+
+  const isLoading = workersLoading || attendanceLoading;
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: '10px',
+    padding: '20px',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+  };
+
+  const statCardStyle: React.CSSProperties = {
+    backgroundColor: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: '10px',
+    padding: '16px 20px',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+    textAlign: 'center' as const,
+  };
 
   return (
-    <div className="space-y-6">
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Owner Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </p>
-        </div>
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-sm px-3 py-1">
-          <Users className="w-3.5 h-3.5 mr-1.5" />
-          {activeWorkers.length} Active Workers
-        </Badge>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '22px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 4px 0' }}>
+          Owner Dashboard
+        </h2>
+        <p style={{ fontSize: '14px', color: '#666', margin: 0 }}>
+          {formatDate(today)} — Today's Overview
+        </p>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Workers', value: activeWorkers.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Present Today', value: presentWorkers.length, icon: UserCheck, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Absent Today', value: absentWorkers.length, icon: UserX, color: 'text-red-600', bg: 'bg-red-50' },
-          { label: '2PM Confirmed', value: confirmations.filter(c => c.confirmed).length, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-        ].map(stat => (
-          <Card key={stat.label} className="shadow-card border-0">
-            <CardContent className="p-4">
-              <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>
-                <stat.icon className={`w-5 h-5 ${stat.color}`} />
-              </div>
-              <div className="text-2xl font-bold text-gray-800">{isLoading ? '—' : stat.value}</div>
-              <div className="text-xs text-gray-500 mt-0.5">{stat.label}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {isLoading ? (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>Loading...</div>
+      ) : (
+        <>
+          {/* Stats Row */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '12px',
+              marginBottom: '24px',
+            }}
+          >
+            <div style={statCardStyle}>
+              <p style={{ fontSize: '28px', fontWeight: 800, color: '#22C55E', margin: '0 0 4px 0' }}>
+                {presentWorkers.length}
+              </p>
+              <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>Present</p>
+            </div>
+            <div style={statCardStyle}>
+              <p style={{ fontSize: '28px', fontWeight: 800, color: '#EF4444', margin: '0 0 4px 0' }}>
+                {absentWorkers.length}
+              </p>
+              <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>Absent</p>
+            </div>
+            <div style={statCardStyle}>
+              <p style={{ fontSize: '28px', fontWeight: 800, color: '#0EA5E9', margin: '0 0 4px 0' }}>
+                {activeWorkers.length}
+              </p>
+              <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>Total Workers</p>
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Present List */}
-        <Card className="shadow-card border-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <UserCheck className="w-4 h-4 text-green-600" />
-              Present Today ({presentWorkers.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}</div>
-            ) : presentWorkers.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">No workers present yet</p>
+          {/* Present Workers */}
+          <div style={{ ...cardStyle, marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+              ✅ Present Today ({presentWorkers.length})
+            </h3>
+            {presentWorkers.length === 0 ? (
+              <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>No workers marked present yet.</p>
             ) : (
-              <div className="space-y-2">
-                {presentWorkers.map(w => (
-                  <button
-                    key={w.workerId}
-                    onClick={() => onNavigate('workerDetail', { workerId: w.workerId })}
-                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {presentWorkers.map(({ worker }) => (
+                  <div
+                    key={worker.workerId}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: '#F0FDF4',
+                      borderRadius: '6px',
+                      border: '1px solid #BBF7D0',
+                    }}
                   >
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-700 font-semibold text-sm flex-shrink-0">
-                      {w.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">{w.name}</span>
-                    <Badge className="ml-auto bg-green-100 text-green-700 border-green-200 text-xs">Present</Badge>
-                  </button>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#1a1a1a' }}>
+                      {worker.name}
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#16A34A' }}>
+                      {worker.workerId}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Absent List */}
-        <Card className="shadow-card border-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <UserX className="w-4 h-4 text-red-500" />
-              Not Marked Today ({absentWorkers.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="space-y-2">{[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}</div>
-            ) : absentWorkers.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">All workers have marked attendance</p>
+          {/* Absent Workers */}
+          <div style={{ ...cardStyle, marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+              ❌ Absent Today ({absentWorkers.length})
+            </h3>
+            {absentWorkers.length === 0 ? (
+              <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>All workers are present!</p>
             ) : (
-              <div className="space-y-2">
-                {absentWorkers.map(w => (
-                  <button
-                    key={w.workerId}
-                    onClick={() => onNavigate('workerDetail', { workerId: w.workerId })}
-                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {absentWorkers.map((worker) => (
+                  <div
+                    key={worker.workerId}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: '#FEF2F2',
+                      borderRadius: '6px',
+                      border: '1px solid #FECACA',
+                    }}
                   >
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600 font-semibold text-sm flex-shrink-0">
-                      {w.name.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">{w.name}</span>
-                    <Badge className="ml-auto bg-red-100 text-red-700 border-red-200 text-xs">Not Marked</Badge>
-                  </button>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#1a1a1a' }}>
+                      {worker.name}
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#DC2626' }}>
+                      {worker.workerId}
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Salary Summary */}
-      <Card className="shadow-card border-0">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            Salary Records — {new Date(year, month - 1).toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {currentMonthSalaries.length === 0 ? (
-            <p className="text-gray-400 text-sm text-center py-4">No salary records for this month</p>
-          ) : (
-            <div className="space-y-2">
-              {currentMonthSalaries.map(s => (
-                <div key={s.salaryId} className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
-                  <span className="text-sm font-medium text-gray-700">{s.workerId}</span>
-                  <span className="text-sm font-bold text-gray-800">₹{Number(s.netPay).toLocaleString('en-IN')}</span>
-                </div>
+          {/* 2PM Confirmations */}
+          <div style={{ ...cardStyle, marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+              🕑 2PM Confirmations ({confirmedWorkers.length}/{activeWorkers.length})
+            </h3>
+            {confirmationsLoading ? (
+              <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>Loading...</p>
+            ) : confirmedWorkers.length === 0 ? (
+              <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>No 2PM confirmations yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {confirmedWorkers.map((conf) => {
+                  const worker = workers.find((w) => w.workerId === conf.workerId);
+                  return (
+                    <div
+                      key={conf.confirmationId}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        backgroundColor: '#F0F9FF',
+                        borderRadius: '6px',
+                        border: '1px solid #BAE6FD',
+                      }}
+                    >
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#1a1a1a' }}>
+                        {worker?.name ?? conf.workerId}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#0284C7' }}>Confirmed ✓</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Today's Attendance Map - Owner only */}
+          <div style={{ ...cardStyle, marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 16px 0' }}>
+              🗺️ Today's Attendance Map
+            </h3>
+            <TodayAttendanceMap attendanceData={attendanceWithWorkers} />
+          </div>
+
+          {/* Quick Actions */}
+          <div style={cardStyle}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+              Quick Actions
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+              {[
+                { label: 'Manage Workers', page: 'workers' },
+                { label: 'Attendance', page: 'attendance' },
+                { label: 'Salary', page: 'salary' },
+                { label: 'Holidays', page: 'holidays' },
+                { label: 'Notes', page: 'notes' },
+              ].map(({ label, page }) => (
+                <button
+                  key={page}
+                  onClick={() => onNavigate(page)}
+                  style={{
+                    backgroundColor: '#F0F9FF',
+                    color: '#0EA5E9',
+                    border: '1px solid #BAE6FD',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
               ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }

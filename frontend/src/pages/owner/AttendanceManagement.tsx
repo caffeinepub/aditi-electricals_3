@@ -6,303 +6,208 @@ import {
   useOwnerUpdateAttendance,
   useOwnerDeleteAttendance,
 } from '../../hooks/useQueries';
-import { AttendanceRecord, AttendanceStatus } from '../../backend';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Label } from '@/components/ui/label';
-import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import AttendanceCalendar from '../../components/AttendanceCalendar';
-import { getMonthName } from '../../utils/dateUtils';
+import { AttendanceRecord, AttendanceStatus } from '../../backend';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { ChevronLeft, Loader2, MapPin, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface Props {
+  initialWorkerId?: string | null;
+}
 
 const STATUS_OPTIONS = [
-  { value: 'present', label: 'Present' },
-  { value: 'absent', label: 'Absent' },
-  { value: 'leave', label: 'Leave' },
-  { value: 'holiday', label: 'Holiday' },
+  { value: AttendanceStatus.present, label: 'Present', cls: 'status-present' },
+  { value: AttendanceStatus.absent, label: 'Absent', cls: 'status-absent' },
+  { value: AttendanceStatus.leave, label: 'Leave', cls: 'status-leave' },
+  { value: AttendanceStatus.holiday, label: 'Holiday', cls: 'status-holiday' },
 ];
 
-const STATUS_MAP: Record<string, AttendanceStatus> = {
-  present: AttendanceStatus.present,
-  absent: AttendanceStatus.absent,
-  leave: AttendanceStatus.leave,
-  holiday: AttendanceStatus.holiday,
-};
+function LocationPreview({ latitude, longitude }: { latitude: number; longitude: number }) {
+  const mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+  const osmUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - 0.005},${latitude - 0.005},${longitude + 0.005},${latitude + 0.005}&layer=mapnik&marker=${latitude},${longitude}`;
 
-export default function AttendanceManagement() {
-  const now = new Date();
+  return (
+    <div className="mt-3 rounded-xl overflow-hidden border border-gray-200">
+      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <MapPin className="w-4 h-4 text-blue-500 shrink-0" />
+        <span className="text-xs font-medium text-gray-600">Location at check-in</span>
+      </div>
+      <div className="relative" style={{ height: 160 }}>
+        <iframe
+          src={osmUrl}
+          title="Attendance location"
+          className="w-full h-full border-0"
+          loading="lazy"
+          sandbox="allow-scripts allow-same-origin"
+        />
+      </div>
+      <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          Open in Google Maps
+        </a>
+      </div>
+    </div>
+  );
+}
+
+export default function AttendanceManagement({ initialWorkerId }: Props) {
   const { data: workers = [] } = useGetAllWorkers();
-  const [selectedWorkerId, setSelectedWorkerId] = useState('');
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(initialWorkerId || null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [existingRecord, setExistingRecord] = useState<AttendanceRecord | undefined>();
 
-  const { data: records = [] } = useGetAttendanceByWorker(selectedWorkerId);
+  const selectedWorker = workers.find(w => w.workerId === selectedWorkerId);
+  const { data: records = [] } = useGetAttendanceByWorker(selectedWorkerId || '');
 
-  const addAtt = useOwnerAddAttendance();
-  const updateAtt = useOwnerUpdateAttendance();
-  const deleteAtt = useOwnerDeleteAttendance();
+  const addAttendance = useOwnerAddAttendance();
+  const updateAttendance = useOwnerUpdateAttendance();
+  const deleteAttendance = useOwnerDeleteAttendance();
 
-  const [addDialog, setAddDialog] = useState(false);
-  const [addDate, setAddDate] = useState('');
-  const [addStatus, setAddStatus] = useState('present');
-
-  const [editRecord, setEditRecord] = useState<AttendanceRecord | null>(null);
-  const [editStatus, setEditStatus] = useState('present');
-
-  const [deleteTarget, setDeleteTarget] = useState<AttendanceRecord | null>(null);
-  const [error, setError] = useState('');
-
-  const monthRecords = records.filter(r => {
-    const [y, m] = r.date.split('-').map(Number);
-    return y === year && m === month;
-  });
-
-  const handleAdd = async () => {
-    if (!selectedWorkerId || !addDate) return;
-    setError('');
-    try {
-      await addAtt.mutateAsync({
-        workerId: selectedWorkerId,
-        date: addDate,
-        status: STATUS_MAP[addStatus],
-      });
-      setAddDialog(false);
-      setAddDate('');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to add attendance.';
-      setError(msg.includes('already exists') ? 'Attendance already exists for this date.' : msg);
-    }
+  const handleDateClick = (date: string, existing?: AttendanceRecord) => {
+    setSelectedDate(date);
+    setExistingRecord(existing);
+    setDialogOpen(true);
   };
 
-  const handleUpdate = async () => {
-    if (!editRecord) return;
-    setError('');
+  const handleSetStatus = async (status: AttendanceStatus) => {
+    if (!selectedWorkerId) return;
     try {
-      await updateAtt.mutateAsync({
-        recordId: editRecord.recordId,
-        status: STATUS_MAP[editStatus],
-      });
-      setEditRecord(null);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to update attendance.';
-      setError(msg);
+      if (existingRecord) {
+        await updateAttendance.mutateAsync({ recordId: existingRecord.recordId, status });
+        toast.success('Attendance updated');
+      } else {
+        await addAttendance.mutateAsync({ workerId: selectedWorkerId, date: selectedDate, status });
+        toast.success('Attendance marked');
+      }
+      setDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to update attendance');
     }
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setError('');
+    if (!existingRecord) return;
     try {
-      await deleteAtt.mutateAsync(deleteTarget.recordId);
-      setDeleteTarget(null);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete attendance.';
-      setError(msg);
+      await deleteAttendance.mutateAsync(existingRecord.recordId);
+      toast.success('Attendance deleted');
+      setDialogOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to delete');
     }
   };
 
-  // AttendanceCalendar calls onDateClick(date, existingRecord?)
-  const handleDateClick = (date: string, existing?: AttendanceRecord) => {
-    if (existing) {
-      setEditRecord(existing);
-      setEditStatus(existing.status as unknown as string);
-    } else {
-      setAddDate(date);
-      setAddDialog(true);
-    }
-  };
+  const isLoading = addAttendance.isPending || updateAttendance.isPending || deleteAttendance.isPending;
 
-  const prevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(y => y - 1); }
-    else setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(y => y + 1); }
-    else setMonth(m => m + 1);
-  };
+  const hasLocation =
+    existingRecord &&
+    existingRecord.latitude != null &&
+    existingRecord.longitude != null;
+
+  if (!selectedWorkerId) {
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-bold">All Attendance</h2>
+        <p className="text-muted-foreground text-sm">Select a worker to view and manage their attendance.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {workers.map(w => (
+            <Card
+              key={w.workerId}
+              className="card-shadow border-0 cursor-pointer hover:shadow-lg transition-all hover:-translate-y-0.5"
+              onClick={() => setSelectedWorkerId(w.workerId)}
+            >
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-[var(--header-bg)] flex items-center justify-center text-white font-bold text-lg">
+                  {w.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold">{w.name}</p>
+                  <p className="text-sm text-muted-foreground">{w.workerId}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {workers.length === 0 && (
+            <p className="text-muted-foreground col-span-3 py-8 text-center">No workers found.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Attendance Management</h1>
-        <p className="text-gray-500 text-sm mt-0.5">View and edit worker attendance records</p>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={() => setSelectedWorkerId(null)}>
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h2 className="text-2xl font-bold">{selectedWorker?.name}</h2>
+          <p className="text-sm text-muted-foreground">{selectedWorkerId} – Click any date to set attendance</p>
+        </div>
       </div>
 
-      <Card className="shadow-card border-0">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            <div className="flex-1 min-w-0">
-              <Label className="text-sm text-gray-600 mb-1.5 block">Select Worker</Label>
-              <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Choose a worker..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {workers.filter(w => w.active).map(w => (
-                    <SelectItem key={w.workerId} value={w.workerId}>{w.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-sm text-gray-600 mb-1.5 block">Month</Label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={prevMonth} className="h-9 w-9">
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-sm font-medium w-28 text-center">{getMonthName(month)} {year}</span>
-                <Button variant="outline" size="icon" onClick={nextMonth} className="h-9 w-9">
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <AttendanceCalendar
+        workerId={selectedWorkerId}
+        records={records}
+        onDateClick={handleDateClick}
+        isOwner={true}
+      />
 
-      {!selectedWorkerId ? (
-        <Card className="shadow-card border-0">
-          <CardContent className="py-12 text-center text-gray-400">
-            Select a worker to view their attendance
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="shadow-card border-0">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{getMonthName(month)} {year}</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => { setAddDate(''); setAddDialog(true); }}
-                className="gap-1.5 text-xs h-8"
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set Attendance – {selectedDate}</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-3 py-2">
+            {STATUS_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => handleSetStatus(opt.value)}
+                disabled={isLoading}
+                className={`py-3 rounded-xl font-semibold text-sm transition-all hover:opacity-90 ${opt.cls} ${
+                  existingRecord && String(existingRecord.status) === String(opt.value) ? 'ring-2 ring-offset-2 ring-primary' : ''
+                }`}
               >
-                + Add Record
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <AttendanceCalendar
-              month={month}
-              year={year}
-              records={monthRecords}
-              isOwner={true}
-              onDateClick={handleDateClick}
+                {opt.label}
+                {existingRecord && String(existingRecord.status) === String(opt.value) && ' ✓'}
+              </button>
+            ))}
+          </div>
+
+          {/* Location preview — only shown when coordinates are present */}
+          {hasLocation && (
+            <LocationPreview
+              latitude={existingRecord!.latitude!}
+              longitude={existingRecord!.longitude!}
             />
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {error && (
-        <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-        </div>
-      )}
-
-      {/* Add Dialog */}
-      <Dialog open={addDialog} onOpenChange={setAddDialog}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add Attendance Record</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <input
-                type="date"
-                value={addDate}
-                onChange={e => setAddDate(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={addStatus} onValueChange={setAddStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map(s => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddDialog(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={addAtt.isPending || !addDate}>
-              {addAtt.isPending ? 'Adding...' : 'Add'}
-            </Button>
-          </DialogFooter>
+          {existingRecord && (
+            <DialogFooter>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={isLoading}
+                className="w-full"
+              >
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Delete Record
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
-
-      {/* Edit Dialog */}
-      <Dialog open={!!editRecord} onOpenChange={() => setEditRecord(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Edit Attendance — {editRecord?.date}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={editStatus} onValueChange={setEditStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map(s => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { setDeleteTarget(editRecord); setEditRecord(null); }}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-            >
-              Delete
-            </Button>
-            <Button variant="outline" onClick={() => setEditRecord(null)}>Cancel</Button>
-            <Button onClick={handleUpdate} disabled={updateAtt.isPending}>
-              {updateAtt.isPending ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Attendance Record</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete attendance record for {deleteTarget?.date}? This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              {deleteAtt.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

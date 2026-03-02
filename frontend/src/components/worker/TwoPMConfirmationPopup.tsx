@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirmTwoPM, useGetMyConfirmation } from '../../hooks/useQueries';
-import { getTodayDateString, isAfter2PM } from '../../utils/dateUtils';
+import { getTodayString, isAfter2PM } from '../../utils/dateUtils';
 import { Button } from '@/components/ui/button';
 import { CheckCircle, Clock } from 'lucide-react';
 
 export default function TwoPMConfirmationPopup() {
   const { user } = useAuth();
   const workerId = user?.workerId || '';
-  const today = getTodayDateString();
+  const today = getTodayString();
 
   const { data: confirmation, isLoading } = useGetMyConfirmation(workerId, today);
   const confirmMutation = useConfirmTwoPM();
@@ -53,12 +53,12 @@ export default function TwoPMConfirmationPopup() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
+      <div className="bg-card rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 text-center">
         <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <Clock className="w-10 h-10 text-orange-500" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">2 PM Check-In</h2>
-        <p className="text-gray-600 mb-6 leading-relaxed">
+        <h2 className="text-2xl font-bold text-foreground mb-2">2 PM Check-In</h2>
+        <p className="text-muted-foreground mb-6 leading-relaxed">
           It's 2:00 PM! Please confirm that you have resumed work after your lunch break.
         </p>
         <Button
@@ -78,7 +78,7 @@ export default function TwoPMConfirmationPopup() {
             </span>
           )}
         </Button>
-        <p className="text-xs text-gray-400 mt-4">This popup will reappear until you confirm.</p>
+        <p className="text-xs text-muted-foreground mt-4">This popup will reappear until you confirm.</p>
       </div>
     </div>
   );

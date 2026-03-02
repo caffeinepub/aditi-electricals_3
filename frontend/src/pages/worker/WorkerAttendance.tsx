@@ -1,177 +1,452 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useGetAttendanceByWorker, useGetAttendanceByDate, useMarkAttendance } from '../../hooks/useQueries';
-import { AttendanceStatus } from '../../backend';
-import { getTodayDateString, isWithinAttendanceWindow, getMonthName, getCurrentMonthYear } from '../../utils/dateUtils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import AttendanceCalendar from '../../components/AttendanceCalendar';
+import { useGetAttendanceByWorker, useMarkAttendance } from '../../hooks/useQueries';
+import { AttendanceStatus, ExternalBlob } from '../../backend';
+import { getTodayString, formatDate, isWithinAttendanceWindow } from '../../utils/dateUtils';
+import { useCamera } from '../../camera/useCamera';
 
 export default function WorkerAttendance() {
   const { user } = useAuth();
-  const workerId = user?.workerId || '';
-  const today = getTodayDateString();
-  const { month: curMonth, year: curYear } = getCurrentMonthYear();
+  const workerId = user?.workerId ?? '';
+  const today = getTodayString();
 
-  const [month, setMonth] = useState(curMonth);
-  const [year, setYear] = useState(curYear);
-  const [inWindow, setInWindow] = useState(isWithinAttendanceWindow());
-  const [markError, setMarkError] = useState('');
-  const [markSuccess, setMarkSuccess] = useState(false);
+  const { data: attendanceRecords = [], isLoading } = useGetAttendanceByWorker(workerId);
+  const markAttendanceMutation = useMarkAttendance();
 
-  const { data: allRecords = [] } = useGetAttendanceByWorker(workerId);
-  const { data: todayRecord, refetch: refetchToday } = useGetAttendanceByDate(workerId, today);
-  const markAttendance = useMarkAttendance();
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'denied' | 'error'>('idle');
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [markingStep, setMarkingStep] = useState<'idle' | 'photo' | 'confirming'>('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const interval = setInterval(() => setInWindow(isWithinAttendanceWindow()), 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const {
+    isActive,
+    isLoading: cameraLoading,
+    error: cameraError,
+    startCamera,
+    stopCamera,
+    capturePhoto,
+    videoRef,
+    canvasRef,
+  } = useCamera({ facingMode: 'environment', quality: 0.8 });
 
-  const monthRecords = allRecords.filter(r => {
-    const [y, m] = r.date.split('-').map(Number);
-    return y === year && m === month;
-  });
+  const todayRecord = attendanceRecords.find((r) => r.date === today);
+  const canMark = isWithinAttendanceWindow() && !todayRecord;
 
-  const presentCount = monthRecords.filter(r => (r.status as unknown as string) === 'present').length;
-  const absentCount = monthRecords.filter(r => (r.status as unknown as string) === 'absent').length;
-  const leaveCount = monthRecords.filter(r => (r.status as unknown as string) === 'leave').length;
-
-  const handleMarkAttendance = async () => {
-    setMarkError('');
-    try {
-      await markAttendance.mutateAsync({ workerId, status: AttendanceStatus.present });
-      setMarkSuccess(true);
-      refetchToday();
-      setTimeout(() => setMarkSuccess(false), 3000);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to mark attendance.';
-      if (msg.includes('already marked')) {
-        setMarkError('Attendance already marked for today.');
-      } else {
-        setMarkError(msg);
+  const getGPS = (): Promise<{ lat: number; lng: number } | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
       }
+      setGpsStatus('loading');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const c = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setCoords(c);
+          setGpsStatus('success');
+          resolve(c);
+        },
+        () => {
+          setGpsStatus('denied');
+          resolve(null);
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    });
+  };
+
+  const handleStartMarkAttendance = async () => {
+    setMarkingStep('photo');
+    setShowCamera(false);
+    setCapturedPhoto(null);
+    setPhotoPreviewUrl(null);
+    setCoords(null);
+    setGpsStatus('idle');
+    // Start GPS in background
+    getGPS();
+  };
+
+  const handleOpenCamera = async () => {
+    setShowCamera(true);
+    await startCamera();
+  };
+
+  const handleCapturePhoto = async () => {
+    const file = await capturePhoto();
+    if (file) {
+      setCapturedPhoto(file);
+      const url = URL.createObjectURL(file);
+      setPhotoPreviewUrl(url);
+      setShowCamera(false);
+      await stopCamera();
     }
   };
 
-  const prevMonth = () => {
-    if (month === 1) { setMonth(12); setYear(y => y - 1); }
-    else setMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (month === 12) { setMonth(1); setYear(y => y + 1); }
-    else setMonth(m => m + 1);
+  const handleGallerySelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCapturedPhoto(file);
+      const url = URL.createObjectURL(file);
+      setPhotoPreviewUrl(url);
+      setShowCamera(false);
+    }
   };
 
-  const todayStatus = todayRecord ? (todayRecord.status as unknown as string) : null;
+  const handleConfirmAttendance = async () => {
+    setMarkingStep('confirming');
+    try {
+      let photoBlob: ExternalBlob | null = null;
+      if (capturedPhoto) {
+        const bytes = new Uint8Array(await capturedPhoto.arrayBuffer());
+        photoBlob = ExternalBlob.fromBytes(bytes).withUploadProgress((pct) => {
+          setUploadProgress(pct);
+        });
+      }
+
+      // Wait for GPS if still loading
+      let finalCoords = coords;
+      if (gpsStatus === 'loading') {
+        finalCoords = await getGPS();
+      }
+
+      await markAttendanceMutation.mutateAsync({
+        workerId,
+        status: AttendanceStatus.present,
+        latitude: finalCoords?.lat ?? null,
+        longitude: finalCoords?.lng ?? null,
+        photo: photoBlob,
+      });
+
+      setMarkingStep('idle');
+      setCapturedPhoto(null);
+      setPhotoPreviewUrl(null);
+      setCoords(null);
+      setGpsStatus('idle');
+      setUploadProgress(0);
+    } catch (err: any) {
+      setMarkingStep('idle');
+      alert(err?.message || 'Failed to mark attendance.');
+    }
+  };
+
+  const handleCancelMark = async () => {
+    setMarkingStep('idle');
+    setShowCamera(false);
+    setCapturedPhoto(null);
+    setPhotoPreviewUrl(null);
+    setCoords(null);
+    setGpsStatus('idle');
+    if (isActive) await stopCamera();
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#fff',
+    border: '1px solid #e5e7eb',
+    borderRadius: '10px',
+    padding: '20px',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+    marginBottom: '16px',
+  };
+
+  const btnPrimary: React.CSSProperties = {
+    backgroundColor: '#0EA5E9',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '10px 20px',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  };
+
+  const btnSecondary: React.CSSProperties = {
+    backgroundColor: '#fff',
+    color: '#444',
+    border: '1px solid #CFCFCF',
+    borderRadius: '6px',
+    padding: '10px 20px',
+    fontSize: '14px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">My Attendance</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Track your daily attendance</p>
-      </div>
+    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a1a', marginBottom: '20px' }}>
+        My Attendance
+      </h2>
 
-      {/* Today's Attendance Card */}
-      <Card className="border-0 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-sky-500 to-blue-600 p-4 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sky-100 text-sm">Today</p>
-              <p className="font-bold text-lg">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+      {/* Today's Status */}
+      <div style={cardStyle}>
+        <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+          Today — {formatDate(today)}
+        </h3>
+
+        {isLoading ? (
+          <p style={{ color: '#888', fontSize: '14px' }}>Loading...</p>
+        ) : todayRecord ? (
+          <div>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '6px',
+                padding: '8px 14px',
+                marginBottom: '8px',
+              }}
+            >
+              <span style={{ fontSize: '16px' }}>✅</span>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: '#16A34A' }}>
+                Attendance Marked
+              </span>
             </div>
-            {todayStatus && (
-              <Badge className={
-                todayStatus === 'present' ? 'bg-green-500 text-white border-0 text-sm px-3 py-1' :
-                'bg-red-500 text-white border-0 text-sm px-3 py-1'
-              }>
-                {todayStatus.charAt(0).toUpperCase() + todayStatus.slice(1)}
-              </Badge>
+            {todayRecord.photo && (
+              <div style={{ marginTop: '10px' }}>
+                <img
+                  src={todayRecord.photo.getDirectURL()}
+                  alt="Attendance photo"
+                  style={{
+                    width: '80px',
+                    height: '80px',
+                    objectFit: 'cover',
+                    borderRadius: '6px',
+                    border: '1px solid #e5e7eb',
+                  }}
+                />
+              </div>
             )}
           </div>
-        </div>
-        <CardContent className="p-4">
-          {todayStatus === 'present' ? (
-            <div className="flex items-center gap-3 text-green-600">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">Attendance already marked for today</span>
+        ) : markingStep === 'idle' ? (
+          <div>
+            {canMark ? (
+              <button onClick={handleStartMarkAttendance} style={btnPrimary}>
+                Mark Attendance
+              </button>
+            ) : (
+              <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>
+                {isWithinAttendanceWindow()
+                  ? 'Attendance already marked.'
+                  : 'Attendance window is closed for today.'}
+              </p>
+            )}
+          </div>
+        ) : markingStep === 'photo' ? (
+          <div>
+            <p style={{ fontSize: '14px', fontWeight: 600, color: '#1a1a1a', marginBottom: '12px' }}>
+              Step 1: Take or select a photo (optional)
+            </p>
+
+            {/* GPS status */}
+            <div style={{ marginBottom: '12px', fontSize: '13px', color: '#666' }}>
+              {gpsStatus === 'loading' && '📍 Getting your location...'}
+              {gpsStatus === 'success' && `📍 Location captured (${coords?.lat.toFixed(4)}, ${coords?.lng.toFixed(4)})`}
+              {gpsStatus === 'denied' && '📍 Location not available (attendance will still be marked)'}
+              {gpsStatus === 'idle' && '📍 Requesting location...'}
             </div>
-          ) : inWindow ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-blue-600 text-sm">
-                <Clock className="w-4 h-4" />
-                <span>Attendance window: 9:00 AM – 9:30 AM (Open now)</span>
+
+            {/* Camera preview */}
+            {showCamera && (
+              <div style={{ marginBottom: '12px' }}>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    aspectRatio: '4/3',
+                    backgroundColor: '#000',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    minHeight: '200px',
+                  }}
+                >
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  {cameraLoading && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: 'rgba(0,0,0,0.5)',
+                        color: '#fff',
+                        fontSize: '14px',
+                      }}
+                    >
+                      Starting camera...
+                    </div>
+                  )}
+                </div>
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                {cameraError && (
+                  <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '6px' }}>
+                    Camera error: {cameraError.message}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button
+                    onClick={handleCapturePhoto}
+                    disabled={!isActive || cameraLoading}
+                    style={{
+                      ...btnPrimary,
+                      opacity: !isActive || cameraLoading ? 0.5 : 1,
+                      cursor: !isActive || cameraLoading ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    📸 Capture
+                  </button>
+                  <button
+                    onClick={async () => { setShowCamera(false); await stopCamera(); }}
+                    style={btnSecondary}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-              <Button
-                onClick={handleMarkAttendance}
-                disabled={markAttendance.isPending}
-                className="w-full h-12 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold text-base"
-              >
-                {markAttendance.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Marking...
-                  </span>
-                ) : '✓ Mark Attendance'}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-gray-500 text-sm">
-              <Clock className="w-4 h-4" />
-              <span>Attendance window: 9:00 AM – 9:30 AM (Closed)</span>
-            </div>
-          )}
+            )}
 
-          {markSuccess && (
-            <div className="mt-3 flex items-center gap-2 text-green-600 bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
-              <CheckCircle className="w-4 h-4" />Attendance marked successfully!
-            </div>
-          )}
-          {markError && (
-            <div className="mt-3 flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-              <AlertCircle className="w-4 h-4" />{markError}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            {/* Photo preview */}
+            {photoPreviewUrl && !showCamera && (
+              <div style={{ marginBottom: '12px' }}>
+                <img
+                  src={photoPreviewUrl}
+                  alt="Preview"
+                  style={{
+                    width: '100px',
+                    height: '100px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e7eb',
+                  }}
+                />
+                <button
+                  onClick={() => { setCapturedPhoto(null); setPhotoPreviewUrl(null); }}
+                  style={{ ...btnSecondary, marginLeft: '10px', padding: '6px 12px', fontSize: '12px' }}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
 
-      {/* Monthly Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Present', value: presentCount, color: 'text-green-600', bg: 'bg-green-50' },
-          { label: 'Absent', value: absentCount, color: 'text-red-600', bg: 'bg-red-50' },
-          { label: 'Leave', value: leaveCount, color: 'text-amber-600', bg: 'bg-amber-50' },
-        ].map(s => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-3 text-center">
-              <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-              <div className="text-xs text-gray-500">{s.label}</div>
-            </CardContent>
-          </Card>
-        ))}
+            {/* Photo action buttons */}
+            {!showCamera && (
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                <button onClick={handleOpenCamera} style={btnSecondary}>
+                  📷 Open Camera
+                </button>
+                <button onClick={() => fileInputRef.current?.click()} style={btnSecondary}>
+                  🖼️ Choose from Gallery
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleGallerySelect}
+                />
+              </div>
+            )}
+
+            {/* Confirm / Cancel */}
+            {!showCamera && (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button onClick={handleConfirmAttendance} style={btnPrimary}>
+                  ✅ Confirm Attendance
+                </button>
+                <button onClick={handleCancelMark} style={btnSecondary}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        ) : markingStep === 'confirming' ? (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <p style={{ fontSize: '14px', color: '#666' }}>
+              {uploadProgress > 0 && uploadProgress < 100
+                ? `Uploading photo... ${uploadProgress}%`
+                : 'Marking attendance...'}
+            </p>
+          </div>
+        ) : null}
       </div>
 
-      {/* Calendar */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">{getMonthName(month)} {year}</CardTitle>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={prevMonth} className="h-8 w-8">
-                <ChevronLeft className="w-4 h-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={nextMonth} className="h-8 w-8">
-                <ChevronRight className="w-4 h-4" />
-              </Button>
-            </div>
+      {/* Attendance History */}
+      <div style={cardStyle}>
+        <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a', margin: '0 0 12px 0' }}>
+          Recent Attendance
+        </h3>
+        {isLoading ? (
+          <p style={{ color: '#888', fontSize: '14px' }}>Loading...</p>
+        ) : attendanceRecords.length === 0 ? (
+          <p style={{ color: '#888', fontSize: '14px', margin: 0 }}>No attendance records yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {[...attendanceRecords]
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .slice(0, 10)
+              .map((record) => {
+                const statusColor =
+                  record.status === AttendanceStatus.present
+                    ? '#16A34A'
+                    : record.status === AttendanceStatus.absent
+                    ? '#DC2626'
+                    : record.status === AttendanceStatus.leave
+                    ? '#D97706'
+                    : '#6B7280';
+                const statusBg =
+                  record.status === AttendanceStatus.present
+                    ? '#F0FDF4'
+                    : record.status === AttendanceStatus.absent
+                    ? '#FEF2F2'
+                    : record.status === AttendanceStatus.leave
+                    ? '#FFFBEB'
+                    : '#F9FAFB';
+                const statusBorder =
+                  record.status === AttendanceStatus.present
+                    ? '#BBF7D0'
+                    : record.status === AttendanceStatus.absent
+                    ? '#FECACA'
+                    : record.status === AttendanceStatus.leave
+                    ? '#FDE68A'
+                    : '#E5E7EB';
+
+                return (
+                  <div
+                    key={record.recordId}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      backgroundColor: statusBg,
+                      borderRadius: '6px',
+                      border: `1px solid ${statusBorder}`,
+                    }}
+                  >
+                    <span style={{ fontSize: '14px', color: '#1a1a1a' }}>
+                      {formatDate(record.date)}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: statusColor }}>
+                      {String(record.status).charAt(0).toUpperCase() + String(record.status).slice(1)}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
-        </CardHeader>
-        <CardContent>
-          <AttendanceCalendar month={month} year={year} records={monthRecords} />
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }

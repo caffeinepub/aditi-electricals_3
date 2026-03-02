@@ -1,12 +1,12 @@
 # Specification
 
 ## Summary
-**Goal:** Fix the owner role authorization bug, restore a clean light blue/white UI theme, and remove the logo from the header.
+**Goal:** Fix backend owner authorization so that the authenticated Internet Identity principal is correctly recognized as the owner in all protected backend functions.
 
 **Planned changes:**
-- Change all backend authorization checks from `role === "admin"` to `role === "owner"` so OWNER001 is recognized as super-admin with full access
-- Fix the frontend auth context to store and check `role === "owner"` consistently after OWNER001 login
-- Replace dark blue gradients and dark backgrounds with a light blue/white theme: light blue header, white page backgrounds, white cards with subtle shadows, clean typography
-- Remove all logo images, icons, and circular logo elements from the header; display only the plain text "Aditi Electricals"
+- Fix owner role validation in `backend/main.mo` to use structural principal equality (`Principal.equal`) instead of string coercion or indirect comparisons in all protected functions (`addWorker`, `addHoliday`, `markAttendance`, etc.)
+- Store the owner principal in a stable variable so it persists across canister upgrades
+- Add a safe re-initialization path that allows the first authenticated caller to claim ownership if no owner is currently set, and reject subsequent ownership claims once an owner is recorded
+- Ensure the frontend actor is always constructed with the authenticated Internet Identity agent (not anonymous), and add a guard to prevent mutation calls from being dispatched before the actor is fully initialized with the identity
 
-**User-visible outcome:** Logging in as OWNER001 grants full owner access without any "Unauthorized" errors, the app displays a clean light blue and white UI with no dark gradients, and the header shows only the text "Aditi Electricals" with no logo or icon.
+**User-visible outcome:** The owner can successfully perform all protected actions (add workers, add holidays, mark attendance) without receiving "Unauthorized" errors after logging in with their Internet Identity.

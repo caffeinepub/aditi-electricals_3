@@ -20,6 +20,7 @@ export const _CaffeineStorageRefillResult = IDL.Record({
   'topped_up_amount' : IDL.Opt(IDL.Nat),
 });
 export const AnnouncementId = IDL.Text;
+export const HolidayId = IDL.Text;
 export const WorkerId = IDL.Text;
 export const NoteType = IDL.Variant({
   'work' : IDL.Null,
@@ -42,6 +43,13 @@ export const Announcement = IDL.Record({
   'content' : IDL.Text,
   'createdAt' : Time,
   'announcementId' : AnnouncementId,
+});
+export const Holiday = IDL.Record({
+  'date' : IDL.Text,
+  'name' : IDL.Text,
+  'createdAt' : Time,
+  'description' : IDL.Opt(IDL.Text),
+  'holidayId' : HolidayId,
 });
 export const Note = IDL.Record({
   'workerId' : WorkerId,
@@ -85,11 +93,14 @@ export const AttendanceStatus = IDL.Variant({
 export const AttendanceId = IDL.Text;
 export const AttendanceRecord = IDL.Record({
   'status' : AttendanceStatus,
+  'latitude' : IDL.Opt(IDL.Float64),
   'workerId' : WorkerId,
   'date' : IDL.Text,
   'markedBy' : IDL.Text,
+  'longitude' : IDL.Opt(IDL.Float64),
   'timestamp' : Time,
   'recordId' : AttendanceId,
+  'photo' : IDL.Opt(ExternalBlob),
 });
 export const UserProfile = IDL.Record({
   'workerId' : IDL.Opt(IDL.Text),
@@ -133,6 +144,11 @@ export const idlService = IDL.Service({
   '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
   '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addAnnouncement' : IDL.Func([IDL.Text, IDL.Text], [AnnouncementId], []),
+  'addHoliday' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+      [HolidayId],
+      [],
+    ),
   'addNote' : IDL.Func(
       [WorkerId, NoteType, IDL.Text, IDL.Opt(ExternalBlob)],
       [NoteId],
@@ -158,10 +174,22 @@ export const idlService = IDL.Service({
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'confirmTwoPM' : IDL.Func([WorkerId], [ConfirmationId], []),
   'deleteAnnouncement' : IDL.Func([AnnouncementId], [], []),
+  'deleteHoliday' : IDL.Func([HolidayId], [], []),
   'deleteNote' : IDL.Func([NoteId], [], []),
   'deleteSalaryRecord' : IDL.Func([SalaryId], [], []),
   'deleteWorker' : IDL.Func([WorkerId], [], []),
+  'editHoliday' : IDL.Func(
+      [HolidayId, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+      [],
+      [],
+    ),
+  'editWorker' : IDL.Func(
+      [WorkerId, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Bool],
+      [],
+      [],
+    ),
   'getAllAnnouncements' : IDL.Func([], [IDL.Vec(Announcement)], ['query']),
+  'getAllHolidays' : IDL.Func([], [IDL.Vec(Holiday)], ['query']),
   'getAllNotes' : IDL.Func([], [IDL.Vec(Note)], ['query']),
   'getAllSalaryRecords' : IDL.Func([], [IDL.Vec(SalaryRecord)], ['query']),
   'getAllWorkers' : IDL.Func([], [IDL.Vec(Worker)], ['query']),
@@ -189,6 +217,11 @@ export const idlService = IDL.Service({
     ),
   'getMyNotes' : IDL.Func([], [IDL.Vec(Note)], ['query']),
   'getNotesByType' : IDL.Func([NoteType], [IDL.Vec(Note)], ['query']),
+  'getOwnerStatus' : IDL.Func(
+      [],
+      [IDL.Record({ 'ownerRegistered' : IDL.Bool, 'isOwner' : IDL.Bool })],
+      ['query'],
+    ),
   'getSalaryRecord' : IDL.Func(
       [WorkerId, IDL.Nat, IDL.Nat],
       [IDL.Opt(SalaryRecord)],
@@ -201,7 +234,17 @@ export const idlService = IDL.Service({
     ),
   'getWorker' : IDL.Func([WorkerId], [Worker], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
-  'markAttendance' : IDL.Func([WorkerId, AttendanceStatus], [AttendanceId], []),
+  'markAttendance' : IDL.Func(
+      [
+        WorkerId,
+        AttendanceStatus,
+        IDL.Opt(IDL.Float64),
+        IDL.Opt(IDL.Float64),
+        IDL.Opt(ExternalBlob),
+      ],
+      [AttendanceId],
+      [],
+    ),
   'ownerAddAttendance' : IDL.Func(
       [WorkerId, IDL.Text, AttendanceStatus],
       [AttendanceId],
@@ -209,8 +252,14 @@ export const idlService = IDL.Service({
     ),
   'ownerDeleteAttendance' : IDL.Func([AttendanceId], [], []),
   'ownerUpdateAttendance' : IDL.Func([AttendanceId, AttendanceStatus], [], []),
+  'registerOwner' : IDL.Func([], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'updateAnnouncement' : IDL.Func([AnnouncementId, IDL.Text, IDL.Text], [], []),
+  'updateHoliday' : IDL.Func(
+      [HolidayId, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+      [],
+      [],
+    ),
   'updateNote' : IDL.Func([NoteId, IDL.Text, IDL.Opt(ExternalBlob)], [], []),
   'updateSalaryRecord' : IDL.Func(
       [
@@ -250,6 +299,7 @@ export const idlFactory = ({ IDL }) => {
     'topped_up_amount' : IDL.Opt(IDL.Nat),
   });
   const AnnouncementId = IDL.Text;
+  const HolidayId = IDL.Text;
   const WorkerId = IDL.Text;
   const NoteType = IDL.Variant({
     'work' : IDL.Null,
@@ -272,6 +322,13 @@ export const idlFactory = ({ IDL }) => {
     'content' : IDL.Text,
     'createdAt' : Time,
     'announcementId' : AnnouncementId,
+  });
+  const Holiday = IDL.Record({
+    'date' : IDL.Text,
+    'name' : IDL.Text,
+    'createdAt' : Time,
+    'description' : IDL.Opt(IDL.Text),
+    'holidayId' : HolidayId,
   });
   const Note = IDL.Record({
     'workerId' : WorkerId,
@@ -315,11 +372,14 @@ export const idlFactory = ({ IDL }) => {
   const AttendanceId = IDL.Text;
   const AttendanceRecord = IDL.Record({
     'status' : AttendanceStatus,
+    'latitude' : IDL.Opt(IDL.Float64),
     'workerId' : WorkerId,
     'date' : IDL.Text,
     'markedBy' : IDL.Text,
+    'longitude' : IDL.Opt(IDL.Float64),
     'timestamp' : Time,
     'recordId' : AttendanceId,
+    'photo' : IDL.Opt(ExternalBlob),
   });
   const UserProfile = IDL.Record({
     'workerId' : IDL.Opt(IDL.Text),
@@ -363,6 +423,11 @@ export const idlFactory = ({ IDL }) => {
     '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
     '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addAnnouncement' : IDL.Func([IDL.Text, IDL.Text], [AnnouncementId], []),
+    'addHoliday' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+        [HolidayId],
+        [],
+      ),
     'addNote' : IDL.Func(
         [WorkerId, NoteType, IDL.Text, IDL.Opt(ExternalBlob)],
         [NoteId],
@@ -388,10 +453,22 @@ export const idlFactory = ({ IDL }) => {
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'confirmTwoPM' : IDL.Func([WorkerId], [ConfirmationId], []),
     'deleteAnnouncement' : IDL.Func([AnnouncementId], [], []),
+    'deleteHoliday' : IDL.Func([HolidayId], [], []),
     'deleteNote' : IDL.Func([NoteId], [], []),
     'deleteSalaryRecord' : IDL.Func([SalaryId], [], []),
     'deleteWorker' : IDL.Func([WorkerId], [], []),
+    'editHoliday' : IDL.Func(
+        [HolidayId, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
+        [],
+        [],
+      ),
+    'editWorker' : IDL.Func(
+        [WorkerId, IDL.Text, IDL.Text, IDL.Nat, IDL.Text, IDL.Bool],
+        [],
+        [],
+      ),
     'getAllAnnouncements' : IDL.Func([], [IDL.Vec(Announcement)], ['query']),
+    'getAllHolidays' : IDL.Func([], [IDL.Vec(Holiday)], ['query']),
     'getAllNotes' : IDL.Func([], [IDL.Vec(Note)], ['query']),
     'getAllSalaryRecords' : IDL.Func([], [IDL.Vec(SalaryRecord)], ['query']),
     'getAllWorkers' : IDL.Func([], [IDL.Vec(Worker)], ['query']),
@@ -419,6 +496,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getMyNotes' : IDL.Func([], [IDL.Vec(Note)], ['query']),
     'getNotesByType' : IDL.Func([NoteType], [IDL.Vec(Note)], ['query']),
+    'getOwnerStatus' : IDL.Func(
+        [],
+        [IDL.Record({ 'ownerRegistered' : IDL.Bool, 'isOwner' : IDL.Bool })],
+        ['query'],
+      ),
     'getSalaryRecord' : IDL.Func(
         [WorkerId, IDL.Nat, IDL.Nat],
         [IDL.Opt(SalaryRecord)],
@@ -432,7 +514,13 @@ export const idlFactory = ({ IDL }) => {
     'getWorker' : IDL.Func([WorkerId], [Worker], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'markAttendance' : IDL.Func(
-        [WorkerId, AttendanceStatus],
+        [
+          WorkerId,
+          AttendanceStatus,
+          IDL.Opt(IDL.Float64),
+          IDL.Opt(IDL.Float64),
+          IDL.Opt(ExternalBlob),
+        ],
         [AttendanceId],
         [],
       ),
@@ -447,9 +535,15 @@ export const idlFactory = ({ IDL }) => {
         [],
         [],
       ),
+    'registerOwner' : IDL.Func([], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'updateAnnouncement' : IDL.Func(
         [AnnouncementId, IDL.Text, IDL.Text],
+        [],
+        [],
+      ),
+    'updateHoliday' : IDL.Func(
+        [HolidayId, IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
         [],
         [],
       ),

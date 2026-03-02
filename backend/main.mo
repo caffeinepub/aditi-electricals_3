@@ -8,20 +8,23 @@ import Map "mo:core/Map";
 import Nat32 "mo:core/Nat32";
 import Runtime "mo:core/Runtime";
 import Principal "mo:core/Principal";
+import Migration "migration";
 
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import AccessControl "authorization/access-control";
 import MixinAuthorization "authorization/MixinAuthorization";
-import Migration "migration";
 
-// add migration code in with clause
+// With migration on upgrades
 (with migration = Migration.run)
 actor {
   include MixinStorage();
 
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
+
+  // ---- Owner Principal ----
+  var owner : ?Principal = null;
 
   // ---- User Profile ----
   public type UserProfile = {
@@ -33,24 +36,60 @@ actor {
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can get profiles");
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can get profiles");
     };
     userProfiles.get(caller);
   };
 
+  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Runtime.trap("Unauthorized: Only users can save profiles");
+    };
+    userProfiles.add(caller, profile);
+  };
+
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
+    if (caller != user and not AccessControl.isAdmin(accessControlState, caller) and not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
-  public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
-      Runtime.trap("Unauthorized: Only authenticated users can save profiles");
+  // ---- Owner Registration ----
+  // Allows the first authenticated caller to claim ownership when no owner is set.
+  // After ownership is claimed, this function becomes a no-op for non-owners.
+  public shared ({ caller }) func registerOwner() : async () {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Anonymous principals cannot register as owner");
     };
-    userProfiles.add(caller, profile);
+    switch (owner) {
+      case (null) {
+        // No owner set yet — allow this caller to claim ownership
+        owner := ?caller;
+      };
+      case (?existingOwner) {
+        if (caller != existingOwner) {
+          Runtime.trap("Unauthorized: An owner is already registered");
+        };
+      };
+    };
+  };
+
+  // ---- Owner Validation ----
+  func isOwnerPrincipal(caller : Principal) : Bool {
+    switch (owner) {
+      case (?principal) { caller == principal };
+      case (null) { false };
+    };
+  };
+
+  // ---- Helper: get workerId linked to caller ----
+  func getCallerWorkerId(caller : Principal) : ?Text {
+    switch (userProfiles.get(caller)) {
+      case (?profile) { profile.workerId };
+      case (null) { null };
+    };
   };
 
   // ---- Types ----
@@ -60,6 +99,7 @@ actor {
   type NoteId = Text;
   type SalaryId = Text;
   type AnnouncementId = Text;
+  type HolidayId = Text;
 
   type Worker = {
     workerId : WorkerId;
@@ -77,6 +117,9 @@ actor {
     status : AttendanceStatus;
     markedBy : Text;
     timestamp : Time.Time;
+    latitude : ?Float;
+    longitude : ?Float;
+    photo : ?Storage.ExternalBlob;
   };
 
   type AttendanceStatus = {
@@ -135,6 +178,14 @@ actor {
     createdAt : Time.Time;
   };
 
+  type Holiday = {
+    holidayId : HolidayId;
+    date : Text;
+    name : Text;
+    description : ?Text;
+    createdAt : Time.Time;
+  };
+
   // ---- Storage ----
   let workers = Map.empty<WorkerId, Worker>();
   let attendanceRecords = Map.empty<AttendanceId, AttendanceRecord>();
@@ -142,23 +193,17 @@ actor {
   let notes = Map.empty<NoteId, Note>();
   let salaryRecords = Map.empty<SalaryId, SalaryRecord>();
   let announcements = Map.empty<AnnouncementId, Announcement>();
+  let holidays = Map.empty<HolidayId, Holiday>();
 
-  // ---- Worker counter for W001/W002 format ----
+  // Worker counter for W001/W002 format
   var workerCounter : Nat = 0;
   var announcementCounter : Nat = 0;
+  var holidayCounter : Nat = 0;
 
-  // ---- Helper: get workerId linked to caller ----
-  func getCallerWorkerId(caller : Principal) : ?WorkerId {
-    switch (userProfiles.get(caller)) {
-      case (?profile) { profile.workerId };
-      case (null) { null };
-    };
-  };
-
-  // ---- Worker Management (Admin/Owner only) ----
+  // ---- Worker Management (Owner only) ----
 
   public shared ({ caller }) func addWorker(name : Text, mobile : Text, monthlySalary : Nat) : async WorkerId {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can add workers");
     };
     workerCounter += 1;
@@ -182,8 +227,42 @@ actor {
     workerId;
   };
 
-  public shared ({ caller }) func updateWorker(workerId : WorkerId, name : Text, mobile : Text, monthlySalary : Nat, pin : Text, active : Bool) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+  public shared ({ caller }) func editWorker(
+    workerId : WorkerId,
+    name : Text,
+    mobile : Text,
+    monthlySalary : Nat,
+    pin : Text,
+    active : Bool,
+  ) : async () {
+    if (not isOwnerPrincipal(caller)) {
+      Runtime.trap("Unauthorized: Only the owner can edit workers");
+    };
+    switch (workers.get(workerId)) {
+      case (null) { Runtime.trap("Worker not found") };
+      case (?existing) {
+        let updated : Worker = {
+          workerId = existing.workerId;
+          name;
+          mobile;
+          monthlySalary;
+          pin;
+          active;
+        };
+        workers.add(workerId, updated);
+      };
+    };
+  };
+
+  public shared ({ caller }) func updateWorker(
+    workerId : WorkerId,
+    name : Text,
+    mobile : Text,
+    monthlySalary : Nat,
+    pin : Text,
+    active : Bool,
+  ) : async () {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can update workers");
     };
     switch (workers.get(workerId)) {
@@ -203,7 +282,7 @@ actor {
   };
 
   public shared ({ caller }) func deleteWorker(workerId : WorkerId) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can delete workers");
     };
     if (not workers.containsKey(workerId)) {
@@ -216,8 +295,8 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to view worker details");
     };
-    // Workers can only view their own record; admin/owner can view any
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    // Workers can only view their own record; owner can view any
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -236,7 +315,7 @@ actor {
   };
 
   public query ({ caller }) func getAllWorkers() : async [Worker] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can list all workers");
     };
     workers.values().toArray().sort();
@@ -251,12 +330,18 @@ actor {
   // ---- Attendance Management ----
 
   // Workers mark their own attendance (time window enforced on frontend, backend enforces one-per-day)
-  public shared ({ caller }) func markAttendance(workerId : WorkerId, status : AttendanceStatus) : async AttendanceId {
+  public shared ({ caller }) func markAttendance(
+    workerId : WorkerId,
+    status : AttendanceStatus,
+    latitude : ?Float,
+    longitude : ?Float,
+    photo : ?Storage.ExternalBlob,
+  ) : async AttendanceId {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to mark attendance");
     };
-    // Workers can only mark their own attendance; admin/owner can mark for any worker
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    // Workers can only mark their own attendance; owner can mark for any worker
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -285,7 +370,7 @@ actor {
       };
       case (null) {
         let attendanceId = workerId # "-" # today;
-        let markedBy = if (AccessControl.isAdmin(accessControlState, caller)) "OWNER" else workerId;
+        let markedBy = if (isOwnerPrincipal(caller)) { "OWNER" } else { workerId };
         let newRecord : AttendanceRecord = {
           recordId = attendanceId;
           workerId;
@@ -293,6 +378,9 @@ actor {
           status;
           markedBy;
           timestamp = Time.now();
+          latitude;
+          longitude;
+          photo;
         };
         attendanceRecords.add(attendanceId, newRecord);
         attendanceId;
@@ -300,9 +388,13 @@ actor {
     };
   };
 
-  // Owner/admin can add attendance for any date/worker
-  public shared ({ caller }) func ownerAddAttendance(workerId : WorkerId, date : Text, status : AttendanceStatus) : async AttendanceId {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+  // Owner can add attendance for any date/worker
+  public shared ({ caller }) func ownerAddAttendance(
+    workerId : WorkerId,
+    date : Text,
+    status : AttendanceStatus,
+  ) : async AttendanceId {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can add attendance records");
     };
     if (not workers.containsKey(workerId)) {
@@ -321,6 +413,9 @@ actor {
           status;
           markedBy = "OWNER";
           timestamp = Time.now();
+          latitude = null;
+          longitude = null;
+          photo = null;
         };
         attendanceRecords.add(attendanceId, newRecord);
         attendanceId;
@@ -328,9 +423,9 @@ actor {
     };
   };
 
-  // Owner/admin can edit any attendance record
+  // Owner can edit any attendance record
   public shared ({ caller }) func ownerUpdateAttendance(recordId : AttendanceId, status : AttendanceStatus) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can edit attendance records");
     };
     switch (attendanceRecords.get(recordId)) {
@@ -343,15 +438,18 @@ actor {
           status;
           markedBy = "OWNER";
           timestamp = existing.timestamp;
+          latitude = existing.latitude;
+          longitude = existing.longitude;
+          photo = existing.photo;
         };
         attendanceRecords.add(recordId, updated);
       };
     };
   };
 
-  // Owner/admin can delete any attendance record
+  // Owner can delete any attendance record
   public shared ({ caller }) func ownerDeleteAttendance(recordId : AttendanceId) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can delete attendance records");
     };
     if (not attendanceRecords.containsKey(recordId)) {
@@ -364,7 +462,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to view attendance");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -383,7 +481,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to view attendance");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -423,7 +521,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to confirm 2PM");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -451,9 +549,9 @@ actor {
     confirmationId;
   };
 
-  // Owner/admin views all confirmations for a given date
+  // Owner views all confirmations for a given date
   public query ({ caller }) func getConfirmationsByDate(date : Text) : async [TwoPMConfirmation] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can view all confirmations");
     };
     confirmations.values().toList<TwoPMConfirmation>().filter(
@@ -468,7 +566,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -492,14 +590,19 @@ actor {
   // ---- Notes Management ----
 
   // Add a note — workers can only add work/material notes for themselves
-  public shared ({ caller }) func addNote(workerId : WorkerId, noteType : NoteType, content : Text, photoUrl : ?Storage.ExternalBlob) : async NoteId {
+  public shared ({ caller }) func addNote(
+    workerId : WorkerId,
+    noteType : NoteType,
+    content : Text,
+    photoUrl : ?Storage.ExternalBlob,
+  ) : async NoteId {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to add notes");
     };
     if (not workers.containsKey(workerId)) {
       Runtime.trap("Worker not found");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       // Workers cannot create ownerInstruction or perWorker notes
       switch (noteType) {
         case (#ownerInstruction) {
@@ -529,7 +632,7 @@ actor {
       noteType;
       content;
       photoUrl;
-      createdBy = if (AccessControl.isAdmin(accessControlState, caller)) "OWNER" else workerId;
+      createdBy = if (isOwnerPrincipal(caller)) { "OWNER" } else { workerId };
       createdAt = Time.now();
       updatedAt = null;
     };
@@ -545,7 +648,7 @@ actor {
     switch (notes.get(noteId)) {
       case (null) { Runtime.trap("Note not found") };
       case (?existing) {
-        if (not AccessControl.isAdmin(accessControlState, caller)) {
+        if (not isOwnerPrincipal(caller)) {
           // Workers cannot edit ownerInstruction or perWorker notes
           switch (existing.noteType) {
             case (#ownerInstruction) {
@@ -583,9 +686,9 @@ actor {
     };
   };
 
-  // Delete a note — only owner/admin can delete
+  // Delete a note — only owner can delete
   public shared ({ caller }) func deleteNote(noteId : NoteId) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can delete notes");
     };
     if (not notes.containsKey(noteId)) {
@@ -599,7 +702,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to view notes");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (noteType) {
         case (#ownerInstruction) {
           Runtime.trap("Unauthorized: Workers cannot view owner instructions via this endpoint; use getPublicAnnouncements");
@@ -641,9 +744,9 @@ actor {
     };
   };
 
-  // Owner/admin gets all notes
+  // Owner gets all notes
   public query ({ caller }) func getAllNotes() : async [Note] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can view all notes");
     };
     notes.values().toArray().sort();
@@ -657,7 +760,7 @@ actor {
 
   // ---- Salary Management ----
 
-  // Only owner/admin can add/update salary records
+  // Only owner can add/update salary records
   public shared ({ caller }) func addSalaryRecord(
     workerId : WorkerId,
     month : Nat,
@@ -670,7 +773,7 @@ actor {
     carryForward : Int,
     companyHolidays : Nat,
   ) : async SalaryId {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can add salary records");
     };
     if (not workers.containsKey(workerId)) {
@@ -714,7 +817,7 @@ actor {
     manualOverride : Bool,
     overrideNetPay : ?Int,
   ) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can update salary records");
     };
     switch (salaryRecords.get(salaryId)) {
@@ -752,7 +855,7 @@ actor {
   };
 
   public shared ({ caller }) func deleteSalaryRecord(salaryId : SalaryId) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can delete salary records");
     };
     if (not salaryRecords.containsKey(salaryId)) {
@@ -761,12 +864,12 @@ actor {
     salaryRecords.remove(salaryId);
   };
 
-  // Workers can only view their own salary; owner/admin can view any
+  // Workers can only view their own salary; owner can view any
   public query ({ caller }) func getSalaryRecord(workerId : WorkerId, month : Nat, year : Nat) : async ?SalaryRecord {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Must be authenticated to view salary");
     };
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       switch (getCallerWorkerId(caller)) {
         case (?cid) {
           if (cid != workerId) {
@@ -783,7 +886,7 @@ actor {
   };
 
   public query ({ caller }) func getAllSalaryRecords() : async [SalaryRecord] {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can view all salary records");
     };
     salaryRecords.values().toArray().sort();
@@ -797,9 +900,9 @@ actor {
 
   // ---- Announcements Management ----
 
-  // Only owner/admin can add/edit/delete announcements
+  // Only owner can add/edit/delete announcements
   public shared ({ caller }) func addAnnouncement(title : Text, content : Text) : async AnnouncementId {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can add announcements");
     };
     announcementCounter += 1;
@@ -814,8 +917,12 @@ actor {
     announcementId;
   };
 
-  public shared ({ caller }) func updateAnnouncement(announcementId : AnnouncementId, title : Text, content : Text) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+  public shared ({ caller }) func updateAnnouncement(
+    announcementId : AnnouncementId,
+    title : Text,
+    content : Text,
+  ) : async () {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can update announcements");
     };
     switch (announcements.get(announcementId)) {
@@ -833,7 +940,7 @@ actor {
   };
 
   public shared ({ caller }) func deleteAnnouncement(announcementId : AnnouncementId) : async () {
-    if (not AccessControl.isAdmin(accessControlState, caller)) {
+    if (not isOwnerPrincipal(caller)) {
       Runtime.trap("Unauthorized: Only the owner can delete announcements");
     };
     if (not announcements.containsKey(announcementId)) {
@@ -853,6 +960,110 @@ actor {
   module Announcement {
     public func compare(a1 : Announcement, a2 : Announcement) : Order.Order {
       Text.compare(a1.announcementId, a2.announcementId);
+    };
+  };
+
+  // ---- Holiday Management ----
+
+  // Only owner can add holidays
+  public shared ({ caller }) func addHoliday(date : Text, name : Text, description : ?Text) : async HolidayId {
+    if (not isOwnerPrincipal(caller)) {
+      Runtime.trap("Unauthorized: Only the owner can add holidays");
+    };
+    holidayCounter += 1;
+    let holidayId = "HOLIDAY-" # Nat32.fromNat(holidayCounter).toText();
+    let newHoliday : Holiday = {
+      holidayId;
+      date;
+      name;
+      description;
+      createdAt = Time.now();
+    };
+    holidays.add(holidayId, newHoliday);
+    holidayId;
+  };
+
+  // Only owner can edit holidays
+  public shared ({ caller }) func editHoliday(
+    holidayId : HolidayId,
+    date : Text,
+    name : Text,
+    description : ?Text,
+  ) : async () {
+    if (not isOwnerPrincipal(caller)) {
+      Runtime.trap("Unauthorized: Only the owner can edit holidays");
+    };
+    switch (holidays.get(holidayId)) {
+      case (null) { Runtime.trap("Holiday not found") };
+      case (?existing) {
+        let updated : Holiday = {
+          holidayId = existing.holidayId;
+          date;
+          name;
+          description;
+          createdAt = existing.createdAt;
+        };
+        holidays.add(holidayId, updated);
+      };
+    };
+  };
+
+  // Only owner can update holidays (alias for editHoliday for backward compatibility)
+  public shared ({ caller }) func updateHoliday(
+    holidayId : HolidayId,
+    date : Text,
+    name : Text,
+    description : ?Text,
+  ) : async () {
+    if (not isOwnerPrincipal(caller)) {
+      Runtime.trap("Unauthorized: Only the owner can update holidays");
+    };
+    switch (holidays.get(holidayId)) {
+      case (null) { Runtime.trap("Holiday not found") };
+      case (?existing) {
+        let updated : Holiday = {
+          holidayId = existing.holidayId;
+          date;
+          name;
+          description;
+          createdAt = existing.createdAt;
+        };
+        holidays.add(holidayId, updated);
+      };
+    };
+  };
+
+  // Only owner can delete holidays
+  public shared ({ caller }) func deleteHoliday(holidayId : HolidayId) : async () {
+    if (not isOwnerPrincipal(caller)) {
+      Runtime.trap("Unauthorized: Only the owner can delete holidays");
+    };
+    if (not holidays.containsKey(holidayId)) {
+      Runtime.trap("Holiday not found");
+    };
+    holidays.remove(holidayId);
+  };
+
+  // All authenticated users can view holidays
+  public query ({ caller }) func getAllHolidays() : async [Holiday] {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Must be authenticated to view holidays");
+    };
+    holidays.values().toArray().sort();
+  };
+
+  module Holiday {
+    public func compare(h1 : Holiday, h2 : Holiday) : Order.Order {
+      Text.compare(h1.holidayId, h2.holidayId);
+    };
+  };
+
+  // ---- Owner Query ----
+  // Allows the frontend to check whether an owner has been registered and whether the caller is the owner
+  public query ({ caller }) func getOwnerStatus() : async { ownerRegistered : Bool; isOwner : Bool } {
+    {
+      ownerRegistered = switch (owner) { case (?_) { true }; case (null) { false } };
+      isOwner = isOwnerPrincipal(caller);
     };
   };
 };

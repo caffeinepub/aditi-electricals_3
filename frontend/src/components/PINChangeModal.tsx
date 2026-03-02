@@ -16,7 +16,6 @@ interface PINChangeModalProps {
 
 export default function PINChangeModal({ open, onClose, targetWorkerId, targetWorkerName }: PINChangeModalProps) {
   const { user } = useAuth();
-  // Always pass a string to useGetWorker — empty string disables via enabled condition
   const workerId = targetWorkerId || user?.workerId || '';
   const { data: worker } = useGetWorker(workerId);
   const updateWorker = useUpdateWorker();
@@ -58,7 +57,6 @@ export default function PINChangeModal({ open, onClose, targetWorkerId, targetWo
     }
 
     if (user?.role === 'owner' && !targetWorkerId) {
-      // Owner changing own PIN — owner PIN is managed locally
       setSuccess(true);
       setTimeout(() => { setSuccess(false); onClose(); resetForm(); }, 1500);
       return;
@@ -74,7 +72,7 @@ export default function PINChangeModal({ open, onClose, targetWorkerId, targetWo
         workerId: worker.workerId,
         name: worker.name,
         mobile: worker.mobile,
-        monthlySalary: worker.monthlySalary,
+        monthlySalary: Number(worker.monthlySalary),
         pin: newPin,
         active: worker.active,
       });

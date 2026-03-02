@@ -1,97 +1,183 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AttendanceRecord, AttendanceStatus } from '../backend';
-import { getDaysInMonth } from '../utils/dateUtils';
+import { getDaysInMonth, getFirstDayOfMonth, getMonthName } from '../utils/dateUtils';
+
+interface Holiday {
+  date: string;
+  name: string;
+}
 
 interface AttendanceCalendarProps {
-  month: number;
-  year: number;
+  workerId: string;
   records: AttendanceRecord[];
-  onDateClick?: (date: string, existing?: AttendanceRecord) => void;
+  holidays?: Holiday[];
+  onDateClick?: (date: string, existingRecord?: AttendanceRecord) => void;
   isOwner?: boolean;
 }
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  present: { bg: '#1B5E20', text: '#ffffff', label: 'Present' },
-  absent: { bg: '#B71C1C', text: '#ffffff', label: 'Absent' },
-  leave: { bg: '#F57F17', text: '#ffffff', label: 'Leave' },
-  holiday: { bg: '#757575', text: '#ffffff', label: 'Holiday' },
+const STATUS_STYLES: Record<string, string> = {
+  present: 'status-present',
+  absent: 'status-absent',
+  leave: 'status-leave',
+  holiday: 'status-holiday',
 };
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const STATUS_LABELS: Record<string, string> = {
+  present: 'P',
+  absent: 'A',
+  leave: 'L',
+  holiday: 'H',
+};
 
-export default function AttendanceCalendar({ month, year, records, onDateClick, isOwner }: AttendanceCalendarProps) {
-  const daysInMonth = getDaysInMonth(month, year);
-  const firstDay = new Date(year, month - 1, 1).getDay();
-  // Convert Sunday=0 to Monday=0 offset
-  const startOffset = (firstDay === 0 ? 6 : firstDay - 1);
+export default function AttendanceCalendar({
+  workerId,
+  records,
+  holidays = [],
+  onDateClick,
+  isOwner = false,
+}: AttendanceCalendarProps) {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+
+  const daysInMonth = getDaysInMonth(year, month);
+  const firstDay = getFirstDayOfMonth(year, month);
 
   const recordMap: Record<string, AttendanceRecord> = {};
   records.forEach(r => {
-    recordMap[r.date] = r;
+    if (r.date.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+      recordMap[r.date] = r;
+    }
   });
 
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < startOffset; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  const holidaySet = new Set(holidays.map(h => h.date));
 
-  const getDateStr = (day: number) => {
-    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const prevMonth = () => {
+    if (month === 1) { setMonth(12); setYear(y => y - 1); }
+    else setMonth(m => m - 1);
   };
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const nextMonth = () => {
+    if (month === 12) { setMonth(1); setYear(y => y + 1); }
+    else setMonth(m => m + 1);
+  };
+
+  const handleDayClick = (day: number) => {
+    if (!onDateClick || !isOwner) return;
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    onDateClick(dateStr, recordMap[dateStr]);
+  };
+
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Count stats
+  const presentCount = records.filter(r => {
+    const d = new Date(r.date);
+    return d.getFullYear() === year && d.getMonth() + 1 === month && r.status === AttendanceStatus.present;
+  }).length;
+  const absentCount = records.filter(r => {
+    const d = new Date(r.date);
+    return d.getFullYear() === year && d.getMonth() + 1 === month && r.status === AttendanceStatus.absent;
+  }).length;
+  const leaveCount = records.filter(r => {
+    const d = new Date(r.date);
+    return d.getFullYear() === year && d.getMonth() + 1 === month && r.status === AttendanceStatus.leave;
+  }).length;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 px-4 pt-4 pb-2">
-        {Object.entries(STATUS_COLORS).map(([key, val]) => (
-          <div key={key} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: val.bg }} />
-            <span className="text-xs text-gray-600">{val.label}</span>
-          </div>
-        ))}
+    <div className="bg-card rounded-xl card-shadow p-4">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-accent transition-colors">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h3 className="font-semibold text-lg">{getMonthName(month)} {year}</h3>
+        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-accent transition-colors">
+          <ChevronRight className="w-5 h-5" />
+        </button>
       </div>
 
-      {/* Day headers */}
-      <div className="grid grid-cols-7 border-b border-gray-100">
-        {DAYS.map(d => (
-          <div key={d} className="text-center text-xs font-semibold text-gray-500 py-2">
-            {d}
-          </div>
+      {/* Stats row */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <span className="text-xs px-2 py-1 rounded-full status-present font-medium">P: {presentCount}</span>
+        <span className="text-xs px-2 py-1 rounded-full status-absent font-medium">A: {absentCount}</span>
+        <span className="text-xs px-2 py-1 rounded-full status-leave font-medium">L: {leaveCount}</span>
+      </div>
+
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 mb-2">
+        {weekDays.map(d => (
+          <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
         ))}
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7">
-        {cells.map((day, idx) => {
-          if (!day) return <div key={`empty-${idx}`} className="h-10 border-b border-r border-gray-50" />;
-          const dateStr = getDateStr(day);
+      <div className="grid grid-cols-7 gap-1">
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`empty-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const record = recordMap[dateStr];
-          const statusKey = record ? (record.status as unknown as string) : null;
-          const colors = statusKey ? STATUS_COLORS[statusKey] : null;
-          const isToday = dateStr === todayStr;
+          const isHoliday = holidaySet.has(dateStr) && !record;
+          const isToday = dateStr === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+          let cellClass = 'relative flex flex-col items-center justify-center rounded-lg aspect-square text-sm transition-all ';
+          let statusLabel = '';
+
+          if (record) {
+            const statusKey = record.status as unknown as string;
+            cellClass += STATUS_STYLES[statusKey] || 'bg-muted';
+            statusLabel = STATUS_LABELS[statusKey] || '';
+          } else if (isHoliday) {
+            cellClass += 'status-holiday';
+            statusLabel = 'H';
+          } else {
+            cellClass += 'bg-muted/30 text-foreground';
+          }
+
+          if (isOwner) {
+            cellClass += ' cursor-pointer hover:opacity-80 hover:scale-105';
+          }
+
+          if (isToday && !record && !isHoliday) {
+            cellClass += ' ring-2 ring-primary ring-offset-1';
+          }
 
           return (
             <button
               key={day}
-              onClick={() => onDateClick && onDateClick(dateStr, record)}
-              disabled={!isOwner && !onDateClick}
-              className={`h-10 border-b border-r border-gray-50 flex items-center justify-center text-sm font-medium transition-all relative
-                ${isOwner ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}
-                ${isToday && !colors ? 'ring-2 ring-inset ring-blue-400' : ''}
-              `}
-              style={colors ? { backgroundColor: colors.bg, color: colors.text } : { color: '#374151' }}
-              title={colors ? `${MONTHS[month-1]} ${day}: ${colors.label}` : `${MONTHS[month-1]} ${day}`}
+              className={cellClass}
+              onClick={() => handleDayClick(day)}
+              disabled={!isOwner}
             >
-              {day}
-              {isToday && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
-              )}
+              <span className="font-medium text-xs">{day}</span>
+              {statusLabel && <span className="text-xs font-bold leading-none">{statusLabel}</span>}
             </button>
           );
         })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t border-border">
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm status-present inline-block" />
+          <span className="text-xs text-muted-foreground">Present</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm status-absent inline-block" />
+          <span className="text-xs text-muted-foreground">Absent</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm status-leave inline-block" />
+          <span className="text-xs text-muted-foreground">Leave</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm status-holiday inline-block" />
+          <span className="text-xs text-muted-foreground">Holiday</span>
+        </div>
       </div>
     </div>
   );

@@ -43,7 +43,7 @@ export default function EditWorkerModal({ worker, onClose }: EditWorkerModalProp
         workerId: worker.workerId,
         name: name.trim(),
         mobile: mobile.trim(),
-        monthlySalary: BigInt(Math.round(Number(salary))),
+        monthlySalary: Math.round(Number(salary)),
         pin: worker.pin,
         active,
       });
@@ -75,10 +75,10 @@ export default function EditWorkerModal({ worker, onClose }: EditWorkerModalProp
             <Label>Monthly Salary (₹) <span className="text-red-500">*</span></Label>
             <Input value={salary} onChange={e => setSalary(e.target.value)} type="number" min="1" required />
           </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
             <div>
               <Label className="text-sm font-medium">Active Status</Label>
-              <p className="text-xs text-gray-500">Inactive workers cannot log in</p>
+              <p className="text-xs text-muted-foreground">Inactive workers cannot log in</p>
             </div>
             <Switch checked={active} onCheckedChange={setActive} />
           </div>
@@ -96,7 +96,7 @@ export default function EditWorkerModal({ worker, onClose }: EditWorkerModalProp
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>Cancel</Button>
-            <Button type="submit" disabled={updateWorker.isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button type="submit" disabled={updateWorker.isPending}>
               {updateWorker.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>

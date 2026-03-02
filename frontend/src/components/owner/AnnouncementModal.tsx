@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Plus, Edit2, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
-import { formatTimestampFull } from '../../utils/dateUtils';
+import { formatTimestamp } from '../../utils/dateUtils';
 
 interface AnnouncementModalProps {
   open: boolean;
@@ -63,14 +63,14 @@ export default function AnnouncementModal({ open, onClose }: AnnouncementModalPr
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <span>Announcements</span>
-              <Button size="sm" onClick={startAdd} className="bg-blue-600 hover:bg-blue-700 gap-1.5 h-8">
+              <Button size="sm" onClick={startAdd} className="gap-1.5 h-8">
                 <Plus className="w-3.5 h-3.5" />New
               </Button>
             </DialogTitle>
           </DialogHeader>
 
           {showForm && (
-            <div className="space-y-3 border border-blue-100 rounded-lg p-4 bg-blue-50">
+            <div className="space-y-3 border border-border rounded-lg p-4 bg-muted/30">
               <div className="space-y-1.5">
                 <Label className="text-xs">Title</Label>
                 <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Announcement title" />
@@ -86,7 +86,7 @@ export default function AnnouncementModal({ open, onClose }: AnnouncementModalPr
               )}
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="flex-1">Cancel</Button>
-                <Button size="sm" onClick={handleSave} disabled={addAnn.isPending || updateAnn.isPending} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                <Button size="sm" onClick={handleSave} disabled={addAnn.isPending || updateAnn.isPending} className="flex-1">
                   {(addAnn.isPending || updateAnn.isPending) ? 'Saving...' : 'Save'}
                 </Button>
               </div>
@@ -101,21 +101,21 @@ export default function AnnouncementModal({ open, onClose }: AnnouncementModalPr
 
           <div className="space-y-3 mt-2">
             {announcements.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-4">No announcements yet</p>
+              <p className="text-muted-foreground text-sm text-center py-4">No announcements yet</p>
             ) : (
               [...announcements].reverse().map(ann => (
-                <div key={ann.announcementId} className="border border-gray-100 rounded-lg p-3">
+                <div key={ann.announcementId} className="border border-border rounded-lg p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm">{ann.title}</p>
-                      <p className="text-gray-600 text-sm mt-0.5">{ann.content}</p>
-                      <p className="text-xs text-gray-400 mt-1">{formatTimestampFull(ann.createdAt)}</p>
+                      <p className="font-semibold text-sm">{ann.title}</p>
+                      <p className="text-muted-foreground text-sm mt-0.5">{ann.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{formatTimestamp(ann.createdAt)}</p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-blue-600" onClick={() => startEdit(ann)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => startEdit(ann)}>
                         <Edit2 className="w-3.5 h-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-600" onClick={() => setDeleteTarget(ann)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteTarget(ann)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -127,19 +127,15 @@ export default function AnnouncementModal({ open, onClose }: AnnouncementModalPr
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+      <AlertDialog open={!!deleteTarget} onOpenChange={v => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Announcement</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{deleteTarget?.title}"?
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete Announcement?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete the announcement.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-              {deleteAnn.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

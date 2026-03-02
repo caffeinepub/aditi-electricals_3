@@ -5,126 +5,149 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { ChevronLeft, ChevronRight, AlertCircle, CheckCircle } from 'lucide-react';
-import { getMonthName, getCurrentMonthYear } from '../../utils/dateUtils';
-import SalaryBreakdownCard from '../../components/salary/SalaryBreakdownCard';
+import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
+import { getMonthName } from '../../utils/dateUtils';
 
-interface SalaryManagementProps {
-  preselectedWorkerId?: string;
-}
+function SalaryForm({ workerId, month, year }: { workerId: string; month: number; year: number }) {
+  const { data: record, isLoading } = useGetSalaryRecord(workerId, month, year);
+  const addRecord = useAddSalaryRecord();
+  const updateRecord = useUpdateSalaryRecord();
 
-export default function SalaryManagement({ preselectedWorkerId }: SalaryManagementProps) {
-  const { month: curMonth, year: curYear } = getCurrentMonthYear();
-  const { data: workers = [] } = useGetAllWorkers();
+  const [monthlySalary, setMonthlySalary] = useState('');
+  const [presentDays, setPresentDays] = useState('');
+  const [absentDays, setAbsentDays] = useState('');
+  const [cutDays, setCutDays] = useState('');
+  const [advance, setAdvance] = useState('');
+  const [carryForward, setCarryForward] = useState('');
+  const [companyHolidays, setCompanyHolidays] = useState('');
 
-  const [selectedWorkerId, setSelectedWorkerId] = useState(preselectedWorkerId || '');
-  const [month, setMonth] = useState(curMonth);
-  const [year, setYear] = useState(curYear);
-
-  // Always call hook with a string — empty string disables via enabled condition
-  const { data: salaryRecord, isLoading } = useGetSalaryRecord(selectedWorkerId, month, year);
-  const addSalary = useAddSalaryRecord();
-  const updateSalary = useUpdateSalaryRecord();
-
-  const [editing, setEditing] = useState(false);
-  const [manualOverride, setManualOverride] = useState(false);
-  const [overrideNetPay, setOverrideNetPay] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  const [form, setForm] = useState({
-    monthlySalary: '',
-    presentDays: '',
-    absentDays: '',
-    cutDays: '',
-    advanceAmount: '',
-    carryForward: '',
-    companyHolidays: '',
-  });
-
-  const selectedWorker = workers.find(w => w.workerId === selectedWorkerId);
-
-  const startEditing = () => {
-    if (salaryRecord) {
-      setForm({
-        monthlySalary: String(Number(salaryRecord.monthlySalary)),
-        presentDays: String(Number(salaryRecord.presentDays)),
-        absentDays: String(Number(salaryRecord.absentDays)),
-        cutDays: String(Number(salaryRecord.cutDays)),
-        advanceAmount: String(Number(salaryRecord.advanceAmount)),
-        carryForward: String(Number(salaryRecord.carryForward)),
-        companyHolidays: String(Number(salaryRecord.companyHolidays)),
-      });
-      setManualOverride(salaryRecord.manualOverride);
-      setOverrideNetPay(String(Number(salaryRecord.netPay)));
-    } else if (selectedWorker) {
-      setForm({
-        monthlySalary: String(Number(selectedWorker.monthlySalary)),
-        presentDays: '',
-        absentDays: '',
-        cutDays: '0',
-        advanceAmount: '0',
-        carryForward: '0',
-        companyHolidays: '0',
-      });
-      setManualOverride(false);
-      setOverrideNetPay('');
+  React.useEffect(() => {
+    if (record) {
+      setMonthlySalary(String(record.monthlySalary));
+      setPresentDays(String(record.presentDays));
+      setAbsentDays(String(record.absentDays));
+      setCutDays(String(record.cutDays));
+      setAdvance(String(record.advanceAmount));
+      setCarryForward(String(record.carryForward));
+      setCompanyHolidays(String(record.companyHolidays));
+    } else {
+      setMonthlySalary('');
+      setPresentDays('');
+      setAbsentDays('');
+      setCutDays('0');
+      setAdvance('0');
+      setCarryForward('0');
+      setCompanyHolidays('0');
     }
-    setEditing(true);
-    setError('');
-  };
+  }, [record]);
 
-  const calcPreview = () => {
-    const ms = Number(form.monthlySalary) || 0;
-    const cd = Number(form.cutDays) || 0;
-    const ch = Number(form.companyHolidays) || 0;
-    const adv = Number(form.advanceAmount) || 0;
-    const cf = Number(form.carryForward) || 0;
-    const perDay = Math.floor(ms / 30);
-    const finalDed = Math.max(0, cd - ch);
-    const cutAmt = finalDed * perDay;
-    const net = ms - cutAmt - adv + cf;
-    return { perDay, finalDed, cutAmt, net };
-  };
-
-  const { perDay, finalDed, cutAmt, net } = calcPreview();
+  const ms = Number(monthlySalary) || 0;
+  const perDay = ms > 0 ? Math.round(ms / 30) : 0;
+  const cd = Number(cutDays) || 0;
+  const ch = Number(companyHolidays) || 0;
+  const finalDeductible = Math.max(0, cd - ch);
+  const cutAmount = finalDeductible * perDay;
+  const adv = Number(advance) || 0;
+  const cf = Number(carryForward) || 0;
+  const netPay = ms - cutAmount - adv + cf;
 
   const handleSave = async () => {
-    if (!selectedWorkerId) return;
-    setError('');
+    if (!monthlySalary) { toast.error('Enter monthly salary'); return; }
+    const params = {
+      workerId, month, year,
+      monthlySalary: ms,
+      presentDays: Number(presentDays) || 0,
+      absentDays: Number(absentDays) || 0,
+      cutDays: cd,
+      advanceAmount: adv,
+      carryForward: cf,
+      companyHolidays: ch,
+    };
     try {
-      const params = {
-        workerId: selectedWorkerId,
-        month,
-        year,
-        monthlySalary: Number(form.monthlySalary),
-        presentDays: Number(form.presentDays) || 0,
-        absentDays: Number(form.absentDays) || 0,
-        cutDays: Number(form.cutDays) || 0,
-        advanceAmount: Number(form.advanceAmount) || 0,
-        carryForward: Number(form.carryForward) || 0,
-        companyHolidays: Number(form.companyHolidays) || 0,
-      };
-
-      if (salaryRecord) {
-        await updateSalary.mutateAsync({
-          salaryId: salaryRecord.salaryId,
+      if (record) {
+        await updateRecord.mutateAsync({
+          salaryId: record.salaryId,
           ...params,
-          manualOverride,
-          overrideNetPay: manualOverride && overrideNetPay ? Number(overrideNetPay) : null,
+          manualOverride: false,
+          overrideNetPay: null,
         });
+        toast.success('Salary record updated');
       } else {
-        await addSalary.mutateAsync(params);
+        await addRecord.mutateAsync(params);
+        toast.success('Salary record created');
       }
-      setSuccess(true);
-      setEditing(false);
-      setTimeout(() => setSuccess(false), 2000);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save salary record.';
-      setError(msg);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save');
     }
   };
+
+  if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Monthly Salary (₹)</Label>
+          <Input type="number" value={monthlySalary} onChange={e => setMonthlySalary(e.target.value)} placeholder="e.g. 15000" />
+        </div>
+        <div className="space-y-2">
+          <Label>Per Day Salary (auto)</Label>
+          <Input value={`₹${perDay}`} readOnly className="bg-muted" />
+        </div>
+        <div className="space-y-2">
+          <Label>Present Days</Label>
+          <Input type="number" value={presentDays} onChange={e => setPresentDays(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Absent Days</Label>
+          <Input type="number" value={absentDays} onChange={e => setAbsentDays(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Cut Days (manual)</Label>
+          <Input type="number" value={cutDays} onChange={e => setCutDays(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Company Holidays</Label>
+          <Input type="number" value={companyHolidays} onChange={e => setCompanyHolidays(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Advance (₹)</Label>
+          <Input type="number" value={advance} onChange={e => setAdvance(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Carry Forward (₹)</Label>
+          <Input type="number" value={carryForward} onChange={e => setCarryForward(e.target.value)} />
+        </div>
+      </div>
+
+      {/* Computed fields */}
+      <div className="bg-muted/40 rounded-xl p-4 space-y-2">
+        <h4 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">Calculated Summary</h4>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <span className="text-muted-foreground">Final Deductible Days:</span>
+          <span className="font-semibold">{finalDeductible}</span>
+          <span className="text-muted-foreground">Cut Amount:</span>
+          <span className="font-semibold text-red-600">-₹{cutAmount}</span>
+          <span className="text-muted-foreground">Net Pay:</span>
+          <span className={`font-bold text-lg ${netPay >= 0 ? 'text-green-700' : 'text-red-600'}`}>₹{netPay}</span>
+        </div>
+      </div>
+
+      <Button onClick={handleSave} disabled={addRecord.isPending || updateRecord.isPending} className="w-full">
+        {(addRecord.isPending || updateRecord.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        {record ? 'Update Salary Record' : 'Create Salary Record'}
+      </Button>
+    </div>
+  );
+}
+
+export default function SalaryManagement() {
+  const { data: workers = [] } = useGetAllWorkers();
+  const [selectedWorkerId, setSelectedWorkerId] = useState('');
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
 
   const prevMonth = () => {
     if (month === 1) { setMonth(12); setYear(y => y - 1); }
@@ -137,170 +160,47 @@ export default function SalaryManagement({ preselectedWorkerId }: SalaryManageme
 
   return (
     <div className="space-y-6">
-      {!preselectedWorkerId && (
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Salary Management</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Manage worker salary records</p>
-        </div>
-      )}
+      <h2 className="text-2xl font-bold">Salary Management</h2>
 
-      <Card className="shadow-card border-0">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            {!preselectedWorkerId && (
-              <div className="flex-1 min-w-0">
-                <Label className="text-sm text-gray-600 mb-1.5 block">Select Worker</Label>
-                <Select value={selectedWorkerId} onValueChange={v => { setSelectedWorkerId(v); setEditing(false); }}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose a worker..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {workers.filter(w => w.active).map(w => (
-                      <SelectItem key={w.workerId} value={w.workerId}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label className="text-sm text-gray-600 mb-1.5 block">Month</Label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={prevMonth} className="h-9 w-9">
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <span className="text-sm font-medium w-28 text-center">{getMonthName(month)} {year}</span>
-                <Button variant="outline" size="icon" onClick={nextMonth} className="h-9 w-9">
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="flex-1 space-y-2">
+          <Label>Select Worker</Label>
+          <Select value={selectedWorkerId} onValueChange={setSelectedWorkerId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose a worker..." />
+            </SelectTrigger>
+            <SelectContent>
+              {workers.map(w => (
+                <SelectItem key={w.workerId} value={w.workerId}>{w.name} ({w.workerId})</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Month / Year</Label>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="w-4 h-4" /></Button>
+            <span className="text-sm font-medium w-32 text-center">{getMonthName(month)} {year}</span>
+            <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
           </div>
-        </CardContent>
-      </Card>
-
-      {!selectedWorkerId ? (
-        <Card className="shadow-card border-0">
-          <CardContent className="py-12 text-center text-gray-400">
-            Select a worker to manage their salary
-          </CardContent>
-        </Card>
-      ) : isLoading ? (
-        <Card className="shadow-card border-0">
-          <CardContent className="py-8 text-center text-gray-400">Loading...</CardContent>
-        </Card>
-      ) : !editing && salaryRecord ? (
-        <div className="space-y-4">
-          <SalaryBreakdownCard record={salaryRecord} workerName={selectedWorker?.name} />
-          <Button onClick={startEditing} variant="outline" className="w-full">
-            Edit Salary Record
-          </Button>
-          {success && (
-            <div className="flex items-center gap-2 text-green-600 bg-green-50 border border-green-200 rounded-lg p-3 text-sm">
-              <CheckCircle className="w-4 h-4" />Salary record saved successfully!
-            </div>
-          )}
         </div>
-      ) : editing ? (
-        <Card className="shadow-card border-0">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {salaryRecord ? 'Edit' : 'Add'} Salary — {selectedWorker?.name} — {getMonthName(month)} {year}
+      </div>
+
+      {selectedWorkerId ? (
+        <Card className="card-shadow border-0">
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {workers.find(w => w.workerId === selectedWorkerId)?.name} – {getMonthName(month)} {year}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Monthly Salary (₹)</Label>
-                <Input type="number" value={form.monthlySalary} onChange={e => setForm(f => ({ ...f, monthlySalary: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Present Days</Label>
-                <Input type="number" value={form.presentDays} onChange={e => setForm(f => ({ ...f, presentDays: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Absent Days</Label>
-                <Input type="number" value={form.absentDays} onChange={e => setForm(f => ({ ...f, absentDays: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Cut Days</Label>
-                <Input type="number" value={form.cutDays} onChange={e => setForm(f => ({ ...f, cutDays: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Company Holidays</Label>
-                <Input type="number" value={form.companyHolidays} onChange={e => setForm(f => ({ ...f, companyHolidays: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Advance Amount (₹)</Label>
-                <Input type="number" value={form.advanceAmount} onChange={e => setForm(f => ({ ...f, advanceAmount: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label className="text-xs">Carry Forward (₹, can be negative)</Label>
-                <Input type="number" value={form.carryForward} onChange={e => setForm(f => ({ ...f, carryForward: e.target.value }))} />
-              </div>
-            </div>
-
-            {/* Calculated Preview */}
-            <div className="bg-blue-50 rounded-lg p-4 space-y-2 text-sm">
-              <div className="font-semibold text-blue-800 mb-2">Calculated Preview</div>
-              <div className="flex justify-between text-gray-600">
-                <span>Per Day Rate</span><span className="font-medium">₹{perDay.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Final Deductible Days</span><span className="font-medium">{finalDed}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Cut Amount</span><span className="font-medium text-red-600">-₹{cutAmt.toLocaleString('en-IN')}</span>
-              </div>
-              <div className="flex justify-between font-bold text-blue-800 border-t border-blue-200 pt-2">
-                <span>Net Pay</span><span>₹{net.toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-
-            {/* Manual Override */}
-            <div className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-200">
-              <div>
-                <Label className="text-sm font-medium text-amber-800">Manual Override</Label>
-                <p className="text-xs text-amber-600">Override the calculated net pay</p>
-              </div>
-              <Switch checked={manualOverride} onCheckedChange={setManualOverride} />
-            </div>
-            {manualOverride && (
-              <div className="space-y-1.5">
-                <Label className="text-xs">Override Net Pay (₹)</Label>
-                <Input
-                  type="number"
-                  value={overrideNetPay}
-                  onChange={e => setOverrideNetPay(e.target.value)}
-                  placeholder="Enter final net pay"
-                />
-              </div>
-            )}
-
-            {error && (
-              <div className="flex items-center gap-2 text-red-600 bg-red-50 border border-red-200 rounded-lg p-3 text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />{error}
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
-              <Button
-                onClick={handleSave}
-                disabled={addSalary.isPending || updateSalary.isPending}
-                className="flex-1"
-              >
-                {(addSalary.isPending || updateSalary.isPending) ? 'Saving...' : 'Save Record'}
-              </Button>
-            </div>
+          <CardContent>
+            <SalaryForm workerId={selectedWorkerId} month={month} year={year} />
           </CardContent>
         </Card>
       ) : (
-        <Card className="shadow-card border-0">
-          <CardContent className="py-8 text-center">
-            <p className="text-gray-500 mb-4">No salary record for {getMonthName(month)} {year}</p>
-            <Button onClick={startEditing}>
-              Add Salary Record
-            </Button>
+        <Card className="card-shadow border-0">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Select a worker to view or edit their salary record.
           </CardContent>
         </Card>
       )}

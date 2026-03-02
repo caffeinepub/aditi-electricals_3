@@ -20,11 +20,14 @@ export type AnnouncementId = string;
 export type AttendanceId = string;
 export interface AttendanceRecord {
   'status' : AttendanceStatus,
+  'latitude' : [] | [number],
   'workerId' : WorkerId,
   'date' : string,
   'markedBy' : string,
+  'longitude' : [] | [number],
   'timestamp' : Time,
   'recordId' : AttendanceId,
+  'photo' : [] | [ExternalBlob],
 }
 export type AttendanceStatus = { 'present' : null } |
   { 'leave' : null } |
@@ -32,6 +35,14 @@ export type AttendanceStatus = { 'present' : null } |
   { 'holiday' : null };
 export type ConfirmationId = string;
 export type ExternalBlob = Uint8Array;
+export interface Holiday {
+  'date' : string,
+  'name' : string,
+  'createdAt' : Time,
+  'description' : [] | [string],
+  'holidayId' : HolidayId,
+}
+export type HolidayId = string;
 export interface Note {
   'workerId' : WorkerId,
   'content' : string,
@@ -117,6 +128,7 @@ export interface _SERVICE {
   '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addAnnouncement' : ActorMethod<[string, string], AnnouncementId>,
+  'addHoliday' : ActorMethod<[string, string, [] | [string]], HolidayId>,
   'addNote' : ActorMethod<
     [WorkerId, NoteType, string, [] | [ExternalBlob]],
     NoteId
@@ -140,10 +152,20 @@ export interface _SERVICE {
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'confirmTwoPM' : ActorMethod<[WorkerId], ConfirmationId>,
   'deleteAnnouncement' : ActorMethod<[AnnouncementId], undefined>,
+  'deleteHoliday' : ActorMethod<[HolidayId], undefined>,
   'deleteNote' : ActorMethod<[NoteId], undefined>,
   'deleteSalaryRecord' : ActorMethod<[SalaryId], undefined>,
   'deleteWorker' : ActorMethod<[WorkerId], undefined>,
+  'editHoliday' : ActorMethod<
+    [HolidayId, string, string, [] | [string]],
+    undefined
+  >,
+  'editWorker' : ActorMethod<
+    [WorkerId, string, string, bigint, string, boolean],
+    undefined
+  >,
   'getAllAnnouncements' : ActorMethod<[], Array<Announcement>>,
+  'getAllHolidays' : ActorMethod<[], Array<Holiday>>,
   'getAllNotes' : ActorMethod<[], Array<Note>>,
   'getAllSalaryRecords' : ActorMethod<[], Array<SalaryRecord>>,
   'getAllWorkers' : ActorMethod<[], Array<Worker>>,
@@ -161,6 +183,10 @@ export interface _SERVICE {
   >,
   'getMyNotes' : ActorMethod<[], Array<Note>>,
   'getNotesByType' : ActorMethod<[NoteType], Array<Note>>,
+  'getOwnerStatus' : ActorMethod<
+    [],
+    { 'ownerRegistered' : boolean, 'isOwner' : boolean }
+  >,
   'getSalaryRecord' : ActorMethod<
     [WorkerId, bigint, bigint],
     [] | [SalaryRecord]
@@ -168,7 +194,16 @@ export interface _SERVICE {
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWorker' : ActorMethod<[WorkerId], Worker>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'markAttendance' : ActorMethod<[WorkerId, AttendanceStatus], AttendanceId>,
+  'markAttendance' : ActorMethod<
+    [
+      WorkerId,
+      AttendanceStatus,
+      [] | [number],
+      [] | [number],
+      [] | [ExternalBlob],
+    ],
+    AttendanceId
+  >,
   'ownerAddAttendance' : ActorMethod<
     [WorkerId, string, AttendanceStatus],
     AttendanceId
@@ -178,9 +213,14 @@ export interface _SERVICE {
     [AttendanceId, AttendanceStatus],
     undefined
   >,
+  'registerOwner' : ActorMethod<[], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'updateAnnouncement' : ActorMethod<
     [AnnouncementId, string, string],
+    undefined
+  >,
+  'updateHoliday' : ActorMethod<
+    [HolidayId, string, string, [] | [string]],
     undefined
   >,
   'updateNote' : ActorMethod<[NoteId, string, [] | [ExternalBlob]], undefined>,

@@ -1,122 +1,21 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 5,
-  "summary": "Full-featured employee management PWA called Aditi Electricals with light blue and white theme. Single Owner System (Owner = Super Admin) with multiple Workers. Features: role-based login (Owner: OWNER001/1234, Workers: W001+/0000), strict UI separation, attendance tracking (9-9:30 AM window, no duplicates, live sync), 2PM confirmation alert system with popup and logging, salary calculation (monthly÷30 for cuts, advance carry-forward, holiday deduction logic), notes system (Work/Material/Owner Instructions/Per Worker tabs), push notifications via service worker (attendance reminders, 2PM, salary updates, announcements), worker management (auto-ID W001 format, show NAME not ID throughout), company holiday logic, owner worker detail page, PWA installable with manifest.json and service worker.",
+  "projectStateVersion": 3,
+  "summary": "Project involves a workforce management app with Owner role-based access control. Currently fixing a critical backend authorization failure where the Owner role is not being recognized by the API middleware, blocking core functionality like adding workers, holidays, and marking attendance.",
   "architectural_notes": [
-    "Show worker NAME everywhere in UI; Worker ID (W001 format) is backend-only, never displayed",
-    "Single Owner System: no separate admin role; Owner IS the admin",
-    "Strict role separation: worker UI must never show worker selector dropdown or management controls",
-    "Live sync required: one attendance record per worker per day, no duplicates, worker and owner see same record",
-    "PWA requirements: manifest.json, service worker, installable from Chrome, Play Store Unlisted compatible",
-    "Owner role must be mapped from user ID: if user.id === 'OWNER001' then role = 'owner'; middleware must check role === 'owner' not role === 'admin'",
-    "Header must display only text 'Aditi Electricals' — no logo image, no icon, no placeholder circle"
+    "Uses JWT/session-based authentication with role-based access control (Owner role required for protected actions)",
+    "Backend middleware must validate Owner role from JWT/session token on all protected routes"
   ],
   "known_issues": [
-    "CRITICAL: Owner login not recognized — 'Unauthorized: Only the owner can add workers' error due to role mapping bug (admin vs owner mismatch)"
+    "CRITICAL: Backend rejects all Owner-protected actions with 'Unauthorized: Only the owner can add workers' despite UI showing Owner login — role validation middleware is broken"
   ],
   "isFixRequest": true,
   "existing_features": [
     {
-      "id": "feature-implement-role-based-authentication-flow-on-the-frontend-show-a-single-login-screen-with-id-and-pin-fields-on-submit-validate-against-the-backend-if-owner001-logs-in-store-role-owner-in-app-state-if-a-worker-id-matches-store-role-worker-and-the-worker-s-own-id-redirect-owner-to-owner-dashboard-worker-to-worker-dashboard-no-otp-no-extra-verification-steps-show-a-pin-change-option-post-login-for-both-roles-app-must-be-100-private-no-page-is-accessible-without-login",
-      "title": "Implement role-based authentication flow on the frontend. Show a single login screen with ID and PIN fields. On submit, validate against the backend. If OWNER001 logs in, store role='owner' in app state; if a worker ID matches, store role='worker' and the worker's own ID. Redirect owner to Owner Dashboard, worker to Worker Dashboard. No OTP, no extra verification steps. Show a PIN change option post-login for both roles. App must be 100% private — no page is accessible without login.",
-      "reqIds": [
-        "REQ-2"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-build-the-owner-dashboard-showing-today-s-present-list-worker-names-today-s-absent-list-worker-names-2pm-confirmation-status-table-worker-name-confirmed-yes-no-time-monthly-summary-table-all-workers-name-present-days-absent-days-cut-days-net-pay-total-active-worker-count-all-names-shown-never-ids-include-a-greeting-hello-owner-or-the-owner-s-display-name",
-      "title": "Build the Owner Dashboard showing: Today's Present List (worker names), Today's Absent List (worker names), 2PM Confirmation Status table (worker name, confirmed yes/no, time), Monthly Summary Table (all workers: name, present days, absent days, cut days, net pay), total active worker count. All names shown, never IDs. Include a greeting 'Hello, Owner' or the owner's display name.",
+      "id": "feature-verify-that-the-frontend-actor-hook-useactor-ts-usequeries-ts-always-constructs-the-backend-actor-with-the-authenticated-internet-identity-agent-so-that-msg-caller-on-the-backend-receives-the-real-owner-principal-and-not-the-anonymous-principal-if-any-mutation-call-addworker-addholiday-attendance-mark-is-invoked-before-the-actor-is-fully-initialized-with-the-identity-add-a-guard-that-waits-for-actor-readiness-before-dispatching-the-call",
+      "title": "Verify that the frontend actor hook (useActor.ts / useQueries.ts) always constructs the backend actor with the authenticated Internet Identity agent, so that msg.caller on the backend receives the real owner principal and not the anonymous principal. If any mutation call (addWorker, addHoliday, attendance mark) is invoked before the actor is fully initialized with the identity, add a guard that waits for actor readiness before dispatching the call.",
       "reqIds": [
         "REQ-3"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-build-the-worker-management-section-owner-only-provide-an-add-worker-form-with-fields-name-mobile-optional-monthly-salary-pin-default-0000-auto-generate-the-worker-id-in-w001-format-show-a-worker-list-displaying-names-not-ids-each-worker-row-has-edit-delete-and-view-detail-actions-owner-can-change-any-worker-s-pin-from-this-section-inactive-workers-are-visually-distinguished-worker-ids-are-never-displayed-in-the-ui",
-      "title": "Build the Worker Management section (owner only). Provide an Add Worker form with fields: Name, Mobile (optional), Monthly Salary, PIN (default 0000). Auto-generate the worker ID in W001 format. Show a worker list displaying names (not IDs). Each worker row has Edit, Delete, and View Detail actions. Owner can change any worker's PIN from this section. Inactive workers are visually distinguished. Worker IDs are never displayed in the UI.",
-      "reqIds": [
-        "REQ-4"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-build-the-attendance-system-for-workers-show-a-mark-attendance-button-only-between-9-00-am-and-9-30-am-once-marked-disable-the-button-and-show-attendance-already-marked-for-today-for-the-owner-provide-a-calendar-based-attendance-management-view-per-worker-owner-can-add-edit-or-delete-any-attendance-record-calendar-color-coding-present-dark-green-1b5e20-absent-dark-red-b71c1c-leave-dark-yellow-f57f17-holiday-grey-757575-no-sunday-highlighting-all-dates-same-base-color-enforce-one-record-per-worker-per-day-across-both-roles-no-duplicates-live-sync-so-both-owner-and-worker-see-the-same-record",
-      "title": "Build the Attendance System. For workers: show a 'Mark Attendance' button only between 9:00 AM and 9:30 AM. Once marked, disable the button and show 'Attendance already marked for today'. For the owner: provide a calendar-based attendance management view per worker — owner can add, edit, or delete any attendance record. Calendar color coding: Present = Dark Green (#1B5E20), Absent = Dark Red (#B71C1C), Leave = Dark Yellow (#F57F17), Holiday = Grey (#757575). No Sunday highlighting, all dates same base color. Enforce one record per worker per day across both roles (no duplicates). Live sync so both owner and worker see the same record.",
-      "reqIds": [
-        "REQ-5"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-implement-the-2pm-confirmation-system-at-2-00-pm-trigger-a-loud-push-notification-vibration-and-a-full-screen-popup-with-a-prominent-i-resumed-work-button-when-pressed-log-the-confirmation-with-an-exact-timestamp-in-the-backend-on-the-owner-dashboard-show-a-real-time-confirmation-status-table-workers-who-confirmed-with-time-and-workers-who-have-not-confirmed-shown-as-alert-warning-the-popup-must-reappear-if-dismissed-without-confirming",
-      "title": "Implement the 2PM Confirmation System. At 2:00 PM, trigger a loud push notification, vibration, and a full-screen popup with a prominent 'I Resumed Work' button. When pressed, log the confirmation with an exact timestamp in the backend. On the Owner Dashboard, show a real-time confirmation status table: workers who confirmed (with time) and workers who have not confirmed (shown as alert/warning). The popup must reappear if dismissed without confirming.",
-      "reqIds": [
-        "REQ-6"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-implement-the-pwa-push-notification-system-using-a-service-worker-register-a-service-worker-that-handles-9-00-am-attendance-reminder-9-15-am-start-work-reminder-2-00-pm-confirmation-alert-salary-updated-notification-attendance-approved-notification-owner-announcement-notification-notifications-must-include-vibration-and-sound-they-must-trigger-even-when-the-app-is-closed-or-in-background-include-manifest-json-with-app-name-aditi-electricals-short-name-icons-theme-color-light-blue-background-color-white-display-standalone-making-it-installable-from-chrome-and-play-store-unlisted-compatible",
-      "title": "Implement the PWA Push Notification system using a Service Worker. Register a service worker that handles: 9:00 AM Attendance Reminder, 9:15 AM Start Work Reminder, 2:00 PM Confirmation alert, Salary Updated notification, Attendance Approved notification, Owner Announcement notification. Notifications must include vibration and sound. They must trigger even when the app is closed or in background. Include manifest.json with app name 'Aditi Electricals', short_name, icons, theme_color (light blue), background_color (white), display: standalone, making it installable from Chrome and Play Store Unlisted compatible.",
-      "reqIds": [
-        "REQ-7"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-build-the-notes-system-with-strict-role-based-views-owner-view-search-bar-by-date-worker-name-keyword-add-instruction-button-tabs-work-notes-material-notes-owner-instructions-per-worker-notes-owner-can-add-edit-and-delete-all-note-types-worker-view-tabs-all-work-notes-material-notes-workers-can-add-work-notes-and-material-notes-upload-a-photo-camera-or-gallery-via-file-input-and-edit-only-their-own-notes-worker-view-must-not-show-a-worker-selector-dropdown-owner-instructions-tab-or-per-worker-tab-owner-instructions-public-announcements-show-a-green-public-notice-badge-workers-see-them-read-only-with-no-edit-delete-icons-per-worker-notes-are-visible-only-to-the-owner-and-the-specific-worker-they-are-assigned-to",
-      "title": "Build the Notes System with strict role-based views. Owner view: search bar (by date, worker name, keyword), '+ Add Instruction' button, tabs: Work Notes | Material Notes | Owner Instructions | Per Worker Notes. Owner can add, edit, and delete all note types. Worker view: tabs: All | Work Notes | Material Notes. Workers can add Work Notes and Material Notes, upload a photo (camera or gallery via file input), and edit only their own notes. Worker view must NOT show a worker selector dropdown, Owner Instructions tab, or Per Worker tab. Owner Instructions / Public Announcements show a green 'Public Notice' badge; workers see them read-only with no edit/delete icons. Per Worker Notes are visible only to the owner and the specific worker they are assigned to.",
-      "reqIds": [
-        "REQ-8"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-implement-the-salary-calculation-system-monthly-salary-is-fixed-per-worker-per-day-rate-monthlysalary-30-used-only-for-cut-calculation-cut-days-deducted-cutdays-companyholidays-owner-sets-company-holiday-count-cut-amount-finaldeductibledays-perdayrate-advance-is-stored-separately-and-subtracted-carry-forward-from-previous-month-is-added-or-subtracted-final-net-pay-monthlysalary-cutamount-advance-carryforward-owner-can-manually-override-any-field-worker-sees-a-salary-breakdown-card-monthly-salary-per-day-salary-present-days-absent-days-cut-days-final-deductible-days-cut-amount-advance-carry-forward-final-net-pay-owner-can-trigger-a-salary-updated-notification-to-the-worker",
-      "title": "Implement the Salary Calculation System. Monthly salary is fixed per worker. Per day rate = monthlySalary ÷ 30 (used only for cut calculation). Cut Days deducted = cutDays - companyHolidays (owner sets company holiday count). Cut Amount = finalDeductibleDays × perDayRate. Advance is stored separately and subtracted. Carry Forward from previous month is added (or subtracted). Final Net Pay = monthlySalary - cutAmount - advance + carryForward. Owner can manually override any field. Worker sees a salary breakdown card: Monthly Salary, Per Day Salary, Present Days, Absent Days, Cut Days, Final Deductible Days, Cut Amount, Advance, Carry Forward, Final Net Pay. Owner can trigger a 'Salary Updated' notification to the worker.",
-      "reqIds": [
-        "REQ-9"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-build-the-owner-worker-detail-page-when-the-owner-clicks-a-worker-from-any-list-open-a-full-page-detail-view-showing-worker-name-prominently-attendance-calendar-color-coded-current-month-salary-breakdown-with-edit-controls-advance-entries-add-edit-delete-cut-days-add-edit-delete-all-notes-for-this-worker-all-types-attendance-stats-present-count-absent-count-leave-count-and-inline-edit-controls-for-all-sections-this-page-is-accessible-only-to-the-owner",
-      "title": "Build the Owner Worker Detail Page. When the owner clicks a worker from any list, open a full-page detail view showing: worker name (prominently), attendance calendar (color coded), current month salary breakdown with edit controls, advance entries (add/edit/delete), cut days (add/edit/delete), all notes for this worker (all types), attendance stats (present count, absent count, leave count), and inline edit controls for all sections. This page is accessible only to the owner.",
-      "reqIds": [
-        "REQ-10"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-apply-a-clean-modern-light-blue-and-white-visual-theme-consistently-across-the-entire-app-header-and-navigation-use-light-blue-e3f2fd-to-1565c0-gradient-or-solid-cards-use-white-with-subtle-shadow-typography-is-clean-and-readable-layout-is-responsive-for-mobile-primary-and-desktop-strict-role-separation-owner-ui-and-worker-ui-never-show-mixed-elements-worker-ui-never-shows-management-controls-use-the-app-name-aditi-electricals-in-the-header-logo-greeting-on-worker-dashboard-hello-worker-name-using-their-actual-name",
-      "title": "Apply a clean, modern light blue and white visual theme consistently across the entire app. Header and navigation use light blue (#E3F2FD to #1565C0 gradient or solid). Cards use white with subtle shadow. Typography is clean and readable. Layout is responsive for mobile (primary) and desktop. Strict role separation: owner UI and worker UI never show mixed elements. Worker UI never shows management controls. Use the app name 'Aditi Electricals' in the header/logo. Greeting on worker dashboard: 'Hello, [Worker Name]' using their actual name.",
-      "reqIds": [
-        "REQ-11"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-fix-the-frontend-login-and-auth-context-so-that-when-owner001-logs-in-the-stored-role-is-exactly-owner-not-admin-or-any-other-string-and-all-downstream-role-checks-in-the-frontend-use-owner-as-the-owner-role-identifier-consistently",
-      "title": "Fix the frontend login and auth context so that when OWNER001 logs in, the stored role is exactly 'owner' (not 'admin' or any other string), and all downstream role checks in the frontend use 'owner' as the owner role identifier consistently.",
-      "reqIds": [
-        "REQ-13"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-restore-a-clean-light-blue-and-white-visual-theme-across-the-entire-app-replace-any-dark-blue-gradients-heavy-dark-backgrounds-or-dark-themed-elements-with-header-background-using-solid-light-blue-e3f2fd-to-1565c0-range-no-dark-gradient-page-background-white-ffffff-cards-white-with-a-soft-subtle-box-shadow-clean-spacing-and-modern-minimal-typography-remove-all-dark-gradient-backgrounds-from-headers-sidebars-and-navigation-the-overall-feel-must-be-light-airy-and-minimal",
-      "title": "Restore a clean light blue and white visual theme across the entire app. Replace any dark blue gradients, heavy dark backgrounds, or dark-themed elements with: Header background using solid light blue (#E3F2FD to #1565C0 range, no dark gradient), page background white (#FFFFFF), cards white with a soft subtle box-shadow, clean spacing and modern minimal typography. Remove all dark gradient backgrounds from headers, sidebars, and navigation. The overall feel must be light, airy, and minimal.",
-      "reqIds": [
-        "REQ-14"
-      ],
-      "version": 1
-    },
-    {
-      "id": "feature-remove-the-image-logo-and-any-logo-icon-placeholder-icon-or-circular-logo-element-from-the-app-header-completely-the-header-must-display-only-the-plain-text-aditi-electricals-centered-or-left-aligned-with-no-image-no-icon-no-round-circle-and-no-logo-component-of-any-kind",
-      "title": "Remove the image logo (and any logo icon, placeholder icon, or circular logo element) from the app header completely. The header must display only the plain text 'Aditi Electricals' — centered or left-aligned — with no image, no icon, no round circle, and no logo component of any kind.",
-      "reqIds": [
-        "REQ-15"
       ],
       "version": 1
     }
@@ -124,77 +23,17 @@
   "new_feature_requests": [
     {
       "id": "AR-1",
-      "summary": "Role-based login system: Owner (OWNER001/1234) and Workers (W001+/0000), PIN change, no OTP",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-2",
-      "summary": "Owner management panel: add/edit/delete workers, set salary, edit/delete attendance, manage notes, view all data",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-3",
-      "summary": "Worker view: own attendance/salary/notes only, mark attendance 9-9:30AM, change PIN/language, no worker dropdown",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-4",
-      "summary": "Attendance system: calendar with strong color coding, one record per worker per day, live sync, owner can edit/delete",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-5",
-      "summary": "2PM confirmation system: loud notification, screen popup, 'I Resumed Work' button, timestamp log, owner alert if missed",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-6",
-      "summary": "PWA push notification system via service worker: 9AM/9:15AM reminders, 2PM confirmation, salary/attendance/announcement events, works when app closed",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-7",
-      "summary": "Notes system: Work/Material/Owner Instructions/Per Worker tabs for owner; All/Work/Material tabs for worker; photo upload; owner can edit/delete all",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-8",
-      "summary": "Salary calculation: monthly fixed, per day = monthly÷30, cut days, advance, carry-forward, holiday deduction, manual override for owner",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-9",
-      "summary": "Company holiday logic: owner sets holiday count, deducted from worker leave days for final deductible days calculation",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-10",
-      "summary": "Owner worker detail page: full page with calendar, salary, advance, cut days, notes, stats, and edit controls",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-11",
-      "summary": "Implement the Motoko backend actor with all data models and logic: Worker (auto-ID W001/W002 format, name, mobile, monthlyS alary, PIN, status active/inactive), AttendanceRecord (workerId, date, status: present/absent/leave/holiday, markedBy, timestamp), TwoPMConfirmation (workerId, date, confirmedAt, confirmed bool), Note (id, workerId, type: work/material/ownerInstruction/perWorker, content, photoUrl, createdBy, createdAt, updatedAt), SalaryRecord (workerId, month, year, monthlySalary, presentDays, absentDays, cutDays, advanceAmount, carryForward, companyHolidays, netPay, manualOverride bool), Announcement (id, title, content, createdAt). Owner credentials hardcoded: ID=OWNER001, PIN=1234. Worker default PIN=0000. All CRUD operations exposed as update/query calls. Single actor, no external DB.",
+      "summary": "Fix the backend owner role validation logic in backend/main.mo so that the authenticated Internet Identity principal stored as the owner at initialization is correctly compared against the caller principal in all protected functions (addWorker, addHoliday, markAttendance, and any other owner-gated calls). The comparison must use structural principal equality, not string coercion or any other indirect method that could silently fail.",
       "reqIds": [
         "REQ-1"
       ],
       "status": "pending"
     },
     {
-      "id": "AR-12",
-      "summary": "Fix the owner role authorization bug in the backend. All authorization checks that currently use `role === \"admin\"` must be changed to `role === \"owner\"`. The system must recognize OWNER001 as the owner and grant full super-admin access. Any middleware, guard, or access-control check that blocks owner operations (Add Worker, Edit Worker, Delete Worker, Change PIN, Modify Salary, Edit Attendance, and all protected APIs) must use the 'owner' role string exclusively. There must be no separate 'admin' role anywhere in the codebase.",
+      "id": "AR-2",
+      "summary": "Audit and fix the owner initialization flow in backend/main.mo to ensure the owner principal is correctly recorded when the canister is first set up. If the owner principal is stored via a setup/register call, verify that it is written to stable storage and survives canister upgrades. If it was never written (null/unset), add a safe re-initialization path that allows the current authenticated caller to claim ownership when no owner is set.",
       "reqIds": [
-        "REQ-12"
+        "REQ-2"
       ],
       "status": "pending"
     }

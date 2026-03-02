@@ -3,8 +3,8 @@ import { Note, NoteType } from '../../backend';
 import { useAuth } from '../../contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit2, Trash2, Image as ImageIcon } from 'lucide-react';
-import { formatTimestampFull } from '../../utils/dateUtils';
+import { Edit2, Trash2 } from 'lucide-react';
+import { formatTimestamp } from '../../utils/dateUtils';
 
 interface NoteCardProps {
   note: Note;
@@ -34,7 +34,7 @@ export default function NoteCard({ note, workerName, onEdit, onDelete }: NoteCar
   const photoUrl = note.photoUrl?.getDirectURL?.();
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-card rounded-xl border border-border card-shadow overflow-hidden">
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -42,18 +42,18 @@ export default function NoteCard({ note, workerName, onEdit, onDelete }: NoteCar
               {isOwnerInstruction ? '📢 ' : ''}{typeInfo.label}
             </span>
             {workerName && isOwner && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{workerName}</span>
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{workerName}</span>
             )}
           </div>
           {(canEdit || canDelete) && (
             <div className="flex items-center gap-1 flex-shrink-0">
               {canEdit && onEdit && (
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-blue-600" onClick={() => onEdit(note)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => onEdit(note)}>
                   <Edit2 className="w-3.5 h-3.5" />
                 </Button>
               )}
               {canDelete && onDelete && (
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-400 hover:text-red-600" onClick={() => onDelete(note.noteId)}>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onDelete(note.noteId)}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               )}
@@ -61,17 +61,17 @@ export default function NoteCard({ note, workerName, onEdit, onDelete }: NoteCar
           )}
         </div>
 
-        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
+        <p className="text-foreground text-sm leading-relaxed whitespace-pre-wrap">{note.content}</p>
 
         {photoUrl && (
-          <div className="mt-3 rounded-lg overflow-hidden border border-gray-100">
+          <div className="mt-3 rounded-lg overflow-hidden border border-border">
             <img src={photoUrl} alt="Note attachment" className="w-full max-h-48 object-cover" />
           </div>
         )}
 
-        <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
           <span>{note.createdBy === 'OWNER' ? 'Owner' : (workerName || note.createdBy)}</span>
-          <span>{formatTimestampFull(note.createdAt)}</span>
+          <span>{formatTimestamp(note.createdAt)}</span>
         </div>
       </div>
     </div>
