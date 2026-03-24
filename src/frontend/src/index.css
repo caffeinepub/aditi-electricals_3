@@ -1,0 +1,171 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force light mode only */
+html {
+  color-scheme: light;
+}
+
+:root {
+  --background: oklch(0.96 0.005 240);
+  --foreground: oklch(0.15 0.01 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.15 0.01 240);
+  --primary: oklch(0.55 0.18 230);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.93 0.01 240);
+  --secondary-foreground: oklch(0.25 0.01 240);
+  --muted: oklch(0.93 0.01 240);
+  --muted-foreground: oklch(0.5 0.01 240);
+  --accent: oklch(0.93 0.01 240);
+  --accent-foreground: oklch(0.25 0.01 240);
+  --destructive: oklch(0.5 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --border: oklch(0.88 0.01 240);
+  --input: oklch(0.88 0.01 240);
+  --ring: oklch(0.55 0.18 230);
+  --radius: 0.625rem;
+  --header-bg: oklch(0.58 0.16 230);
+  --header-fg: oklch(1 0 0);
+  --sidebar-bg: oklch(1 0 0);
+  --sidebar-fg: oklch(0.15 0.01 240);
+  --success: oklch(0.35 0.15 145);
+  --warning: oklch(0.55 0.18 75);
+  --chart-1: oklch(0.55 0.18 230);
+  --chart-2: oklch(0.35 0.15 145);
+  --chart-3: oklch(0.5 0.22 25);
+  --chart-4: oklch(0.55 0.18 75);
+  --chart-5: oklch(0.5 0.15 300);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.15 0.01 240);
+  --sidebar-primary: oklch(0.55 0.18 230);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.93 0.01 240);
+  --sidebar-accent-foreground: oklch(0.25 0.01 240);
+  --sidebar-border: oklch(0.88 0.01 240);
+  --sidebar-ring: oklch(0.55 0.18 230);
+}
+
+/* Override any dark mode attempts */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.96 0.005 240);
+    --foreground: oklch(0.15 0.01 240);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.15 0.01 240);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.15 0.01 240);
+    --primary: oklch(0.55 0.18 230);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.93 0.01 240);
+    --secondary-foreground: oklch(0.25 0.01 240);
+    --muted: oklch(0.93 0.01 240);
+    --muted-foreground: oklch(0.5 0.01 240);
+    --accent: oklch(0.93 0.01 240);
+    --accent-foreground: oklch(0.25 0.01 240);
+    --destructive: oklch(0.5 0.22 25);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.88 0.01 240);
+    --input: oklch(0.88 0.01 240);
+    --ring: oklch(0.55 0.18 230);
+    --sidebar: oklch(1 0 0);
+    --sidebar-foreground: oklch(0.15 0.01 240);
+    --sidebar-primary: oklch(0.55 0.18 230);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.93 0.01 240);
+    --sidebar-accent-foreground: oklch(0.25 0.01 240);
+    --sidebar-border: oklch(0.88 0.01 240);
+    --sidebar-ring: oklch(0.55 0.18 230);
+  }
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: #f4f6f8;
+  color: var(--foreground);
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App header */
+.app-header {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+/* Card styles */
+.app-card {
+  background-color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Attendance status colors - strong, no pastels */
+.status-present {
+  background-color: #166534;
+  color: #ffffff;
+}
+.status-absent {
+  background-color: #991b1b;
+  color: #ffffff;
+}
+.status-leave {
+  background-color: #92400e;
+  color: #ffffff;
+}
+.status-holiday {
+  background-color: #4b5563;
+  color: #ffffff;
+}
+
+/* Badge colors */
+.badge-present {
+  background-color: #166534;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-absent {
+  background-color: #991b1b;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-leave {
+  background-color: #92400e;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-holiday {
+  background-color: #4b5563;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
