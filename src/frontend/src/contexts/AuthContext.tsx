@@ -5,8 +5,11 @@ import React, {
   useEffect,
   type ReactNode,
 } from "react";
+import type { Language } from "../lib/i18n";
+import { isSupabaseConfigured, localWorkers } from "../lib/localDb";
 import { supabase } from "../lib/supabase";
 
+export type { Language };
 export type UserRole = "owner" | "worker";
 
 export interface AuthUser {
@@ -25,17 +28,23 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateUserName: (name: string) => void;
-  language: "en" | "hi";
+  language: Language;
+  setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_STORAGE_KEY = "aditi_auth_user_v4";
+const LANG_STORAGE_KEY = "app_language";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [language, setLanguage] = useState<"en" | "hi">("en");
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    if (saved === "en" || saved === "hi" || saved === "mr") return saved;
+    return "en";
+  });
 
   useEffect(() => {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
@@ -53,32 +62,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem(LANG_STORAGE_KEY, lang);
+  };
+
+  const toggleLanguage = () => {
+    setLanguage(language === "en" ? "hi" : language === "hi" ? "mr" : "en");
+  };
+
   const login = async (
     workerId: string,
     pin: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-      if (
-        !supabaseUrl ||
-        supabaseUrl === "undefined" ||
-        supabaseUrl.includes("placeholder") ||
-        !supabaseKey ||
-        supabaseKey === "undefined" ||
-        supabaseKey === "placeholder"
-      ) {
-        return {
-          success: false,
-          error:
-            "Supabase is not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment variables.",
-        };
-      }
-
       const trimmedId = workerId.trim().toUpperCase();
       const trimmedPin = pin.trim();
 
+      // Use localStorage fallback when Supabase is not configured
+      if (!isSupabaseConfigured()) {
+        const worker = localWorkers.getByIdForLogin(trimmedId);
+        if (!worker) {
+          return {
+            success: false,
+            error: "Employee ID not found. Please check your ID and try again.",
+          };
+        }
+        if (!worker.active) {
+          return {
+            success: false,
+            error: "Your account is inactive. Contact the owner.",
+          };
+        }
+        if (worker.pin !== trimmedPin) {
+          return {
+            success: false,
+            error: "Incorrect PIN. Please try again.",
+          };
+        }
+        const role: UserRole =
+          worker.role === "owner" ||
+          trimmedId === "OWNER001" ||
+          trimmedId === "OWNER1"
+            ? "owner"
+            : "worker";
+        const authUser: AuthUser = {
+          workerId: worker.worker_id as string,
+          name: worker.name as string,
+          role,
+        };
+        setUser(authUser);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+        return { success: true };
+      }
+
+      // Supabase login
       const { data, error } = await supabase
         .from("workers")
         .select("worker_id, name, pin, role, active")
@@ -89,7 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (
           error.message?.includes("relation") ||
           error.message?.includes("does not exist") ||
-          error.code === "PGRST116" ||
           error.code === "42P01"
         ) {
           return {
@@ -106,7 +143,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return {
           success: false,
-          error: `Database error: ${(error as { message?: string }).message ?? "Unknown error"}`,
+          error: `Database error: ${
+            (error as { message?: string }).message ?? "Unknown error"
+          }`,
         };
       }
 
@@ -136,8 +175,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : "worker";
 
       const authUser: AuthUser = {
-        workerId: data.worker_id,
-        name: data.name,
+        workerId: data.worker_id as string,
+        name: data.name as string,
         role,
       };
 
@@ -148,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const msg =
         err instanceof Error
           ? err.message
-          : "Connection error. Please check your internet connection and Supabase configuration.";
+          : "Connection error. Please check your internet connection and try again.";
       return { success: false, error: msg };
     }
   };
@@ -165,10 +204,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const toggleLanguage = () => {
-    setLanguage((l) => (l === "en" ? "hi" : "en"));
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -179,6 +214,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         updateUserName,
         language,
+        setLanguage,
         toggleLanguage,
       }}
     >

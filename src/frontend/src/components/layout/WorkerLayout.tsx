@@ -10,6 +10,7 @@ import {
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { t } from "../../lib/i18n";
 import Header from "./Header";
 
 interface WorkerLayoutProps {
@@ -18,21 +19,21 @@ interface WorkerLayoutProps {
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
-const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "attendance", label: "Attendance", icon: CalendarCheck },
-  { id: "salary", label: "My Salary", icon: DollarSign },
-  { id: "notes", label: "My Notes", icon: FileText },
-  { id: "profile", label: "Profile / Settings", icon: Settings },
-];
-
 export default function WorkerLayout({
   children,
   currentPage,
   onNavigate,
 }: WorkerLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, language } = useAuth();
+
+  const navItems = [
+    { id: "dashboard", label: t(language, "dashboard"), icon: LayoutDashboard },
+    { id: "attendance", label: t(language, "attendance"), icon: CalendarCheck },
+    { id: "salary", label: t(language, "mySalary"), icon: DollarSign },
+    { id: "notes", label: t(language, "myNotes"), icon: FileText },
+    { id: "profile", label: t(language, "profile"), icon: Settings },
+  ];
 
   const handleNav = (page: string) => {
     onNavigate(page);
@@ -53,7 +54,7 @@ export default function WorkerLayout({
             letterSpacing: "0.05em",
           }}
         >
-          Worker
+          {t(language, "workerPanel")}
         </div>
         <div
           style={{
@@ -195,7 +196,7 @@ export default function WorkerLayout({
                 <span
                   style={{ fontWeight: 700, fontSize: 16, color: "#1F2937" }}
                 >
-                  Menu
+                  {t(language, "menu")}
                 </span>
                 <button
                   type="button"

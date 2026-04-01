@@ -18,7 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useGetWorker, useUpdateWorker } from "../hooks/useQueries";
 
 export default function Profile() {
-  const { user, updateUserName, language, toggleLanguage } = useAuth();
+  const { user, updateUserName, language, setLanguage } = useAuth();
   const workerId = user?.workerId || "";
   const { data: worker } = useGetWorker(workerId);
   const updateWorker = useUpdateWorker();
@@ -443,8 +443,8 @@ export default function Profile() {
             id="language-select"
             value={language}
             onChange={(e) => {
-              const newLang = e.target.value as "en" | "hi";
-              if (newLang !== language) toggleLanguage();
+              const v = e.target.value;
+              if (v === "en" || v === "hi" || v === "mr") setLanguage(v);
             }}
             style={{
               width: "100%",
@@ -459,12 +459,8 @@ export default function Profile() {
           >
             <option value="en">English</option>
             <option value="hi">Hindi / हिंदी</option>
+            <option value="mr">Marathi / मराठी</option>
           </select>
-          <p style={{ fontSize: 12, color: "#6B7280", marginTop: 6 }}>
-            {language === "hi"
-              ? "हिंदी भाषा निवडली आहे।"
-              : "English language selected."}
-          </p>
         </div>
       </div>
 

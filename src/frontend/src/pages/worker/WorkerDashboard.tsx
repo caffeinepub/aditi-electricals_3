@@ -7,10 +7,11 @@ import {
   useGetAttendanceByWorker,
   useGetMyConfirmation,
 } from "../../hooks/useQueries";
+import { t } from "../../lib/i18n";
 import { getTodayString, isAfter2PM } from "../../utils/dateUtils";
 
 export default function WorkerDashboard() {
-  const { user } = useAuth();
+  const { user, language } = useAuth();
   const workerId = user?.workerId || "";
   const today = getTodayString();
 
@@ -27,35 +28,35 @@ export default function WorkerDashboard() {
   const getStatusDisplay = () => {
     if (!todayStatus)
       return {
-        label: "Not Marked",
+        label: t(language, "notMarked"),
         color: "#6B7280",
         bg: "#F3F4F6",
         icon: <Clock size={18} />,
       };
     if (todayStatus === "present")
       return {
-        label: "Present",
+        label: t(language, "present"),
         color: "#166534",
         bg: "#F0FDF4",
         icon: <CheckCircle size={18} />,
       };
     if (todayStatus === "absent")
       return {
-        label: "Absent",
+        label: t(language, "absent"),
         color: "#991B1B",
         bg: "#FEF2F2",
         icon: <XCircle size={18} />,
       };
     if (todayStatus === "leave")
       return {
-        label: "On Leave",
+        label: t(language, "onLeave"),
         color: "#92400E",
         bg: "#FFF7ED",
         icon: <Clock size={18} />,
       };
     if (todayStatus === "holiday")
       return {
-        label: "Holiday",
+        label: t(language, "holiday"),
         color: "#4B5563",
         bg: "#F9FAFB",
         icon: <Calendar size={18} />,
@@ -137,7 +138,7 @@ export default function WorkerDashboard() {
             marginBottom: 12,
           }}
         >
-          Today's Status
+          {t(language, "todayStatus")}
         </h3>
         <div
           style={{
@@ -174,7 +175,7 @@ export default function WorkerDashboard() {
             marginBottom: 14,
           }}
         >
-          This Month
+          {t(language, "thisMonth")}
         </h3>
         <div
           style={{
@@ -185,19 +186,19 @@ export default function WorkerDashboard() {
         >
           {[
             {
-              label: "Present",
+              label: t(language, "present"),
               value: presentCount,
               color: "#166534",
               bg: "#F0FDF4",
             },
             {
-              label: "Absent",
+              label: t(language, "absent"),
               value: absentCount,
               color: "#991B1B",
               bg: "#FEF2F2",
             },
             {
-              label: "Leave",
+              label: t(language, "onLeave"),
               value: leaveCount,
               color: "#92400E",
               bg: "#FFF7ED",
@@ -223,50 +224,28 @@ export default function WorkerDashboard() {
         </div>
       </div>
 
-      {/* 2PM Confirmation Status */}
+      {/* 2PM Confirmation */}
       <div style={cardStyle}>
         <h3
           style={{
             fontSize: 15,
             fontWeight: 600,
             color: "#1F2937",
-            marginBottom: 12,
+            marginBottom: 8,
           }}
         >
-          2PM Confirmation
+          {t(language, "confirmations2pm")}
         </h3>
-        {confirmation?.confirmed ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              background: "#F0FDF4",
-              borderRadius: 8,
-              border: "1px solid #BBF7D0",
-            }}
-          >
-            <CheckCircle size={16} color="#166534" />
-            <span style={{ fontSize: 14, fontWeight: 600, color: "#166534" }}>
-              Confirmed for today ✓
-            </span>
-          </div>
+        {confirmation ? (
+          <p style={{ fontSize: 13, color: "#166534", margin: 0 }}>
+            ✓ Confirmed. You resumed work after lunch.
+          </p>
         ) : (
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "#FFF7ED",
-              borderRadius: 8,
-              border: "1px solid #FED7AA",
-            }}
-          >
-            <p style={{ fontSize: 14, color: "#92400E", margin: 0 }}>
-              {isAfter2PM()
-                ? "Please confirm you resumed work after lunch."
-                : "Confirmation available at 2:00 PM."}
-            </p>
-          </div>
+          <p style={{ fontSize: 13, color: "#6B7280", margin: 0 }}>
+            {isAfter2PM()
+              ? "Please confirm you resumed work after lunch."
+              : "Confirmation available at 2:00 PM."}
+          </p>
         )}
       </div>
 
@@ -289,8 +268,7 @@ export default function WorkerDashboard() {
           Leave Policy
         </h3>
         <p style={{ fontSize: 13, color: "#3B82F6", margin: 0 }}>
-          You get 2 free leave days per month. Additional leaves will be
-          deducted from salary.
+          {t(language, "companyHolidayNotice")}
         </p>
       </div>
 

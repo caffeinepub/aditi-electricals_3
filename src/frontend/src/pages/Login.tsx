@@ -1,9 +1,10 @@
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
+import { t } from "../lib/i18n";
 
 export default function Login() {
-  const { login, actorReady } = useAuth();
+  const { login, language } = useAuth();
   const [workerId, setWorkerId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
@@ -20,12 +21,9 @@ export default function Login() {
     const result = await login(workerId, pin);
     setLoading(false);
     if (!result.success) {
-      setError(result.error || "Invalid credentials. Please try again.");
+      setError(result.error || t(language, "invalidCredentials"));
     }
   };
-
-  const isConnecting = !actorReady;
-  const buttonDisabled = loading || isConnecting;
 
   return (
     <div
@@ -39,16 +37,36 @@ export default function Login() {
         padding: "20px",
       }}
     >
-      {/* Logo */}
+      {/* Logo - circular */}
       <div style={{ marginBottom: 32, textAlign: "center" }}>
         <img
           src="/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png"
           alt="Aditi Electricals"
-          style={{ width: 200, height: "auto", objectFit: "contain" }}
+          style={{
+            width: 100,
+            height: 100,
+            borderRadius: "50%",
+            objectFit: "cover",
+            border: "3px solid #fff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            display: "block",
+            margin: "0 auto",
+          }}
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
         />
+        <div
+          style={{
+            marginTop: 12,
+            fontSize: 20,
+            fontWeight: 700,
+            color: "#1E3A5F",
+            letterSpacing: 0.5,
+          }}
+        >
+          Aditi Electricals
+        </div>
       </div>
 
       {/* Login Card */}
@@ -71,7 +89,7 @@ export default function Login() {
             textAlign: "center",
           }}
         >
-          Welcome Back
+          {t(language, "welcomeBack")}
         </h2>
         <p
           style={{
@@ -81,7 +99,7 @@ export default function Login() {
             textAlign: "center",
           }}
         >
-          Sign in to Aditi Electricals
+          {t(language, "signInToContinue")}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -96,14 +114,15 @@ export default function Login() {
                 marginBottom: 6,
               }}
             >
-              Employee ID
+              {t(language, "employeeId")}
             </label>
             <input
               id="login-employee-id"
+              data-ocid="login.input"
               type="text"
               value={workerId}
               onChange={(e) => setWorkerId(e.target.value)}
-              placeholder="e.g. OWNER1 or W001"
+              placeholder={t(language, "enterEmployeeId")}
               style={{
                 width: "100%",
                 padding: "10px 14px",
@@ -136,14 +155,15 @@ export default function Login() {
                 marginBottom: 6,
               }}
             >
-              PIN
+              {t(language, "pin")}
             </label>
             <input
               id="login-pin"
+              data-ocid="login.textarea"
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              placeholder="Enter your PIN"
+              placeholder={t(language, "enterPin")}
               maxLength={8}
               style={{
                 width: "100%",
@@ -168,6 +188,7 @@ export default function Login() {
 
           {error && (
             <div
+              data-ocid="login.error_state"
               style={{
                 background: "#FEF2F2",
                 border: "1px solid #FECACA",
@@ -182,105 +203,46 @@ export default function Login() {
             </div>
           )}
 
-          {isConnecting && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                background: "#EFF6FF",
-                border: "1px solid #BFDBFE",
-                borderRadius: 8,
-                padding: "8px 12px",
-                marginBottom: 14,
-                fontSize: 12,
-                color: "#1D4ED8",
-              }}
-            >
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  border: "2px solid #93C5FD",
-                  borderTopColor: "#1D4ED8",
-                  borderRadius: "50%",
-                  display: "inline-block",
-                  flexShrink: 0,
-                  animation: "spin 0.8s linear infinite",
-                }}
-              />
-              Connecting to server…
-            </div>
-          )}
-
           <button
             type="submit"
-            disabled={buttonDisabled}
+            disabled={loading}
             data-ocid="login.submit_button"
             style={{
               width: "100%",
               padding: "12px",
-              background: buttonDisabled ? "#93C5FD" : "#3B82F6",
+              background: loading ? "#93C5FD" : "#3B82F6",
               color: "#fff",
               border: "none",
               borderRadius: 8,
               fontSize: 15,
-              fontWeight: 600,
-              cursor: buttonDisabled ? "not-allowed" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
+              fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "background 0.2s",
             }}
           >
-            {(loading || isConnecting) && (
-              <span
-                style={{
-                  width: 16,
-                  height: 16,
-                  border: "2px solid rgba(255,255,255,0.4)",
-                  borderTopColor: "#fff",
-                  borderRadius: "50%",
-                  display: "inline-block",
-                  animation: "spin 0.8s linear infinite",
-                }}
-              />
-            )}
-            {loading
-              ? "Signing in..."
-              : isConnecting
-                ? "Connecting..."
-                : "Sign In"}
+            {loading ? t(language, "signingIn") : t(language, "signIn")}
           </button>
         </form>
-      </div>
 
-      {/* Footer */}
-      <div
-        style={{
-          marginTop: 32,
-          textAlign: "center",
-          fontSize: 12,
-          color: "#9CA3AF",
-        }}
-      >
-        <p>
-          © {new Date().getFullYear()} Aditi Electricals. All rights reserved.
-        </p>
-        <p style={{ marginTop: 4 }}>
-          Built with ❤️ using{" "}
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 20,
+            fontSize: 12,
+            color: "#9CA3AF",
+          }}
+        >
+          © {new Date().getFullYear()}{" "}
           <a
-            href={`https://caffeine.ai/?utm_source=Caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(typeof window !== "undefined" ? window.location.hostname : "")}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: "#3B82F6", textDecoration: "none" }}
+            style={{ color: "#9CA3AF", textDecoration: "none" }}
           >
-            caffeine.ai
+            Built with ❤️ using caffeine.ai
           </a>
         </p>
       </div>
-
-      <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
     </div>
   );
 }

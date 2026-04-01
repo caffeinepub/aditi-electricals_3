@@ -12,6 +12,7 @@ import {
 import type React from "react";
 import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { t } from "../../lib/i18n";
 import Header from "./Header";
 
 interface OwnerLayoutProps {
@@ -20,23 +21,23 @@ interface OwnerLayoutProps {
   onNavigate: (page: string, params?: Record<string, string>) => void;
 }
 
-const navItems = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { id: "workers", label: "Workers", icon: Users },
-  { id: "attendance", label: "Attendance", icon: CalendarCheck },
-  { id: "salary", label: "Salary", icon: DollarSign },
-  { id: "notes", label: "Notes", icon: FileText },
-  { id: "holidays", label: "Holidays", icon: Calendar },
-  { id: "profile", label: "Profile / Settings", icon: Settings },
-];
-
 export default function OwnerLayout({
   children,
   currentPage,
   onNavigate,
 }: OwnerLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, language } = useAuth();
+
+  const navItems = [
+    { id: "dashboard", label: t(language, "dashboard"), icon: LayoutDashboard },
+    { id: "workers", label: t(language, "workers"), icon: Users },
+    { id: "attendance", label: t(language, "attendance"), icon: CalendarCheck },
+    { id: "salary", label: t(language, "salary"), icon: DollarSign },
+    { id: "notes", label: t(language, "notes"), icon: FileText },
+    { id: "holidays", label: t(language, "holidays"), icon: Calendar },
+    { id: "profile", label: t(language, "profile"), icon: Settings },
+  ];
 
   const handleNav = (page: string) => {
     onNavigate(page);
@@ -57,7 +58,7 @@ export default function OwnerLayout({
             letterSpacing: "0.05em",
           }}
         >
-          Owner Panel
+          {t(language, "ownerPanel")}
         </div>
         <div
           style={{
@@ -196,7 +197,7 @@ export default function OwnerLayout({
                 <span
                   style={{ fontWeight: 700, fontSize: 16, color: "#1F2937" }}
                 >
-                  Menu
+                  {t(language, "menu")}
                 </span>
                 <button
                   type="button"

@@ -7,6 +7,7 @@ import {
   Users,
 } from "lucide-react";
 import React, { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   useGetAllWorkers,
   useGetConfirmationsByDate,
@@ -14,6 +15,7 @@ import {
   useGetMonthlySummary,
   useOwnerGetAttendanceForDate,
 } from "../../hooks/useQueries";
+import { t } from "../../lib/i18n";
 import {
   getCurrentMonthYear,
   getMonthName,
@@ -31,6 +33,7 @@ export default function OwnerDashboard({
   const { month: curMonth, year: curYear } = getCurrentMonthYear();
   const [month, setMonth] = useState(curMonth);
   const [year, setYear] = useState(curYear);
+  const { language } = useAuth();
 
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: summary = [], isLoading: summaryLoading } =
@@ -56,28 +59,28 @@ export default function OwnerDashboard({
 
   const statCards = [
     {
-      label: "Total Workers",
+      label: t(language, "totalWorkers"),
       value: stats ? Number(stats.totalWorkers) : 0,
       icon: Users,
       color: "#3B82F6",
       bg: "#EFF6FF",
     },
     {
-      label: "Today Present",
+      label: t(language, "todayPresent"),
       value: stats ? Number(stats.todayPresent) : 0,
       icon: UserCheck,
       color: "#166534",
       bg: "#F0FDF4",
     },
     {
-      label: "Today Absent",
+      label: t(language, "todayAbsent"),
       value: stats ? Number(stats.todayAbsent) : 0,
       icon: UserX,
       color: "#991B1B",
       bg: "#FEF2F2",
     },
     {
-      label: "2PM Confirmations",
+      label: t(language, "confirmations2pm"),
       value: stats ? Number(stats.twoPMConfirmations) : 0,
       icon: Clock,
       color: "#92400E",
@@ -95,7 +98,7 @@ export default function OwnerDashboard({
           marginBottom: 20,
         }}
       >
-        Dashboard
+        {t(language, "dashboard")}
       </h1>
 
       {/* Stat Cards */}
@@ -142,7 +145,7 @@ export default function OwnerDashboard({
                 </div>
               </div>
               <div style={{ fontSize: 26, fontWeight: 700, color: card.color }}>
-                {statsLoading ? "—" : card.value}
+                {statsLoading ? "\u2014" : card.value}
               </div>
               <div style={{ fontSize: 12, color: "#6B7280", marginTop: 2 }}>
                 {card.label}
@@ -170,7 +173,7 @@ export default function OwnerDashboard({
             marginBottom: 14,
           }}
         >
-          Today's Attendance
+          {t(language, "attendance")}
         </h2>
         {todayAttendance.length === 0 ? (
           <p style={{ color: "#9CA3AF", fontSize: 14 }}>
@@ -229,7 +232,7 @@ export default function OwnerDashboard({
             marginBottom: 14,
           }}
         >
-          2PM Confirmations — Today
+          {t(language, "confirmations2pm")} — Today
         </h2>
         {confirmations.length === 0 ? (
           <p style={{ color: "#9CA3AF", fontSize: 14 }}>
@@ -247,7 +250,7 @@ export default function OwnerDashboard({
                     minute: "2-digit",
                     hour12: true,
                   })
-                : "—";
+                : "\u2014";
               return (
                 <div
                   key={conf.confirmationId}
@@ -296,7 +299,7 @@ export default function OwnerDashboard({
           }}
         >
           <h2 style={{ fontSize: 16, fontWeight: 700, color: "#1F2937" }}>
-            Monthly Summary
+            {t(language, "monthlySummary")}
           </h2>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
@@ -382,7 +385,7 @@ export default function OwnerDashboard({
                       fontSize: 12,
                     }}
                   >
-                    Present
+                    {t(language, "present")}
                   </th>
                   <th
                     style={{
@@ -393,7 +396,7 @@ export default function OwnerDashboard({
                       fontSize: 12,
                     }}
                   >
-                    Absent
+                    {t(language, "absent")}
                   </th>
                   <th
                     style={{
@@ -404,7 +407,7 @@ export default function OwnerDashboard({
                       fontSize: 12,
                     }}
                   >
-                    Leave
+                    {t(language, "onLeave")}
                   </th>
                 </tr>
               </thead>
