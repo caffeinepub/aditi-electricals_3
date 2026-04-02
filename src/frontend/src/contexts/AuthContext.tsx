@@ -16,6 +16,7 @@ export interface AuthUser {
   workerId: string;
   name: string;
   role: UserRole;
+  profilePhoto?: string | null;
 }
 
 interface AuthContextType {
@@ -28,6 +29,7 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateUserName: (name: string) => void;
+  updateProfilePhoto: (photoBase64: string | null) => void;
   language: Language;
   setLanguage: (lang: Language) => void;
   toggleLanguage: () => void;
@@ -37,6 +39,12 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_STORAGE_KEY = "aditi_auth_user_v4";
 const LANG_STORAGE_KEY = "app_language";
+// Separate storage for profile photos (keyed by workerId)
+const PROFILE_PHOTO_KEY_PREFIX = "aditi_profile_photo_";
+
+export function getProfilePhotoKey(workerId: string): string {
+  return PROFILE_PHOTO_KEY_PREFIX + workerId;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -52,7 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(stored);
         if (parsed && (parsed.role === "owner" || parsed.role === "worker")) {
-          setUser(parsed);
+          // Restore profile photo from persistent storage
+          const photo = localStorage.getItem(
+            getProfilePhotoKey(parsed.workerId),
+          );
+          setUser({ ...parsed, profilePhoto: photo || null });
         } else {
           localStorage.removeItem(AUTH_STORAGE_KEY);
         }
@@ -106,13 +118,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           trimmedId === "OWNER1"
             ? "owner"
             : "worker";
+        const photo = localStorage.getItem(
+          getProfilePhotoKey(worker.worker_id as string),
+        );
         const authUser: AuthUser = {
           workerId: worker.worker_id as string,
           name: worker.name as string,
           role,
+          profilePhoto: photo || null,
         };
         setUser(authUser);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+        localStorage.setItem(
+          AUTH_STORAGE_KEY,
+          JSON.stringify({
+            workerId: authUser.workerId,
+            name: authUser.name,
+            role: authUser.role,
+          }),
+        );
         return { success: true };
       }
 
@@ -174,14 +197,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? "owner"
           : "worker";
 
+      const photo = localStorage.getItem(
+        getProfilePhotoKey(data.worker_id as string),
+      );
       const authUser: AuthUser = {
         workerId: data.worker_id as string,
         name: data.name as string,
         role,
+        profilePhoto: photo || null,
       };
 
       setUser(authUser);
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authUser));
+      localStorage.setItem(
+        AUTH_STORAGE_KEY,
+        JSON.stringify({
+          workerId: authUser.workerId,
+          name: authUser.name,
+          role: authUser.role,
+        }),
+      );
       return { success: true };
     } catch (err: unknown) {
       const msg =
@@ -201,7 +235,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const updated = { ...user, name };
     setUser(updated);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({
+        workerId: updated.workerId,
+        name: updated.name,
+        role: updated.role,
+      }),
+    );
+  };
+
+  const updateProfilePhoto = (photoBase64: string | null) => {
+    if (!user) return;
+    const updated = { ...user, profilePhoto: photoBase64 };
+    setUser(updated);
+    // Store photo separately (it's large, keep session data lean)
+    if (photoBase64) {
+      localStorage.setItem(getProfilePhotoKey(user.workerId), photoBase64);
+    } else {
+      localStorage.removeItem(getProfilePhotoKey(user.workerId));
+    }
   };
 
   return (
@@ -213,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         logout,
         updateUserName,
+        updateProfilePhoto,
         language,
         setLanguage,
         toggleLanguage,

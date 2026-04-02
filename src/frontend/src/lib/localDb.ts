@@ -253,6 +253,15 @@ export const localNotes = {
         (b.created_at as string).localeCompare(a.created_at as string),
       );
   },
+  getForWorker(workerId: string): Record<string, unknown>[] {
+    return getTable<Record<string, unknown>>("notes")
+      .filter(
+        (n) => n.worker_id === workerId || n.note_type === "ownerInstruction",
+      )
+      .sort((a, b) =>
+        (b.created_at as string).localeCompare(a.created_at as string),
+      );
+  },
   insert(data: Record<string, unknown>): Record<string, unknown> {
     const records = getTable<Record<string, unknown>>("notes");
     const record = {

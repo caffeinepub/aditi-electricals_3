@@ -14,6 +14,12 @@ interface SalaryManagementProps {
   initialWorkerId?: string;
 }
 
+// Helper: parse string to number safely (empty string -> 0)
+function parseNum(v: string): number {
+  const n = Number.parseFloat(v);
+  return Number.isNaN(n) ? 0 : n;
+}
+
 export default function SalaryManagement({
   initialWorkerId,
 }: SalaryManagementProps) {
@@ -24,12 +30,13 @@ export default function SalaryManagement({
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
 
-  const [presentDays, setPresentDays] = useState(0);
-  const [absentDays, setAbsentDays] = useState(0);
-  const [advanceAmount, setAdvanceAmount] = useState(0);
-  const [carryForward, setCarryForward] = useState(0);
+  // Use string state so user can freely clear & type (no forced "0" blocking)
+  const [presentDaysStr, setPresentDaysStr] = useState("");
+  const [absentDaysStr, setAbsentDaysStr] = useState("");
+  const [advanceAmountStr, setAdvanceAmountStr] = useState("");
+  const [carryForwardStr, setCarryForwardStr] = useState("");
   const [manualOverride, setManualOverride] = useState(false);
-  const [overrideNetPay, setOverrideNetPay] = useState(0);
+  const [overrideNetPayStr, setOverrideNetPayStr] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -53,23 +60,30 @@ export default function SalaryManagement({
 
   useEffect(() => {
     if (salaryRecord) {
-      setPresentDays(Number(salaryRecord.presentDays));
-      setAbsentDays(Number(salaryRecord.absentDays));
-      setAdvanceAmount(Number(salaryRecord.advanceAmount));
-      setCarryForward(Number(salaryRecord.carryForward));
+      setPresentDaysStr(String(Number(salaryRecord.presentDays)));
+      setAbsentDaysStr(String(Number(salaryRecord.absentDays)));
+      setAdvanceAmountStr(String(Number(salaryRecord.advanceAmount)));
+      setCarryForwardStr(String(Number(salaryRecord.carryForward)));
       setManualOverride(salaryRecord.manualOverride);
-      setOverrideNetPay(Number(salaryRecord.netPay));
+      setOverrideNetPayStr(String(Number(salaryRecord.netPay)));
     } else {
-      setPresentDays(0);
-      setAbsentDays(0);
-      setAdvanceAmount(0);
-      setCarryForward(0);
+      setPresentDaysStr("");
+      setAbsentDaysStr("");
+      setAdvanceAmountStr("");
+      setCarryForwardStr("");
       setManualOverride(false);
-      setOverrideNetPay(0);
+      setOverrideNetPayStr("");
     }
     setSaveError("");
     setSaveSuccess(false);
   }, [salaryRecord]);
+
+  // Derive numeric values for calculations
+  const presentDays = parseNum(presentDaysStr);
+  const absentDays = parseNum(absentDaysStr);
+  const advanceAmount = parseNum(advanceAmountStr);
+  const carryForward = parseNum(carryForwardStr);
+  const overrideNetPay = parseNum(overrideNetPayStr);
 
   const monthlySalary = selectedWorker
     ? Number(selectedWorker.monthlySalary)
@@ -130,8 +144,8 @@ export default function SalaryManagement({
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      setSaveError(err?.message || "Failed to save salary record.");
+    } catch (err: unknown) {
+      setSaveError((err as Error)?.message || "Failed to save salary record.");
     }
   };
 
@@ -339,11 +353,16 @@ export default function SalaryManagement({
                   </label>
                   <input
                     id="salary-present-days"
-                    type="number"
-                    value={presentDays}
-                    onChange={(e) => setPresentDays(Number(e.target.value))}
-                    min="0"
-                    max="31"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={presentDaysStr}
+                    placeholder="0"
+                    onChange={(e) => {
+                      // Allow only digits
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setPresentDaysStr(v);
+                    }}
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = "#3B82F6";
@@ -368,11 +387,15 @@ export default function SalaryManagement({
                   </label>
                   <input
                     id="salary-absent-days"
-                    type="number"
-                    value={absentDays}
-                    onChange={(e) => setAbsentDays(Number(e.target.value))}
-                    min="0"
-                    max="31"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={absentDaysStr}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setAbsentDaysStr(v);
+                    }}
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = "#3B82F6";
@@ -397,13 +420,15 @@ export default function SalaryManagement({
                   </label>
                   <input
                     id="salary-advance"
-                    type="number"
-                    value={advanceAmount}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={advanceAmountStr}
+                    placeholder="0"
                     onChange={(e) => {
-                      let value = e.target.value.replace(/^0+/, "");
-                      setAdvanceAmount(Number(value || 0));
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setAdvanceAmountStr(v);
                     }}
-                    min="0"
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = "#3B82F6";
@@ -428,9 +453,15 @@ export default function SalaryManagement({
                   </label>
                   <input
                     id="salary-carry-forward"
-                    type="number"
-                    value={carryForward}
-                    onChange={(e) => setCarryForward(Number(e.target.value))}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={carryForwardStr}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setCarryForwardStr(v);
+                    }}
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = "#3B82F6";
@@ -484,10 +515,15 @@ export default function SalaryManagement({
                   </label>
                   <input
                     id="salary-override-net"
-                    type="number"
-                    value={overrideNetPay}
-                    onChange={(e) => setOverrideNetPay(Number(e.target.value))}
-                    min="0"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={overrideNetPayStr}
+                    placeholder="0"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, "");
+                      setOverrideNetPayStr(v);
+                    }}
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = "#3B82F6";

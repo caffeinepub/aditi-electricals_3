@@ -719,18 +719,46 @@ export function useGetAllNotes() {
 }
 
 export function useGetMyNotes() {
+  const workerId = getStoredWorkerId();
   return useQuery({
-    queryKey: ["myNotes"],
+    queryKey: ["myNotes", workerId],
     queryFn: async () => {
       if (!isSupabaseConfigured()) {
-        return localNotes.getAll().map(mapNote);
+        const allNotes = localNotes.getAll();
+        const filtered = allNotes.filter(
+          (n: Record<string, unknown>) =>
+            n.worker_id === workerId || n.note_type === "ownerInstruction",
+        );
+        return filtered.map(mapNote);
       }
-      const { data, error } = await supabase
-        .from("notes")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data || []).map(mapNote);
+      // Two separate queries then merge (supabase client doesn't support OR filter)
+      const [ownRes, instrRes] = await Promise.all([
+        supabase
+          .from("notes")
+          .select("*")
+          .eq("worker_id", workerId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("notes")
+          .select("*")
+          .eq("note_type", "ownerInstruction")
+          .order("created_at", { ascending: false }),
+      ]);
+      if (ownRes.error) throw ownRes.error;
+      const combined = [...(ownRes.data || []), ...(instrRes.data || [])];
+      const seen = new Set<string>();
+      const unique = combined.filter((n: Record<string, unknown>) => {
+        const id = (n.id || n.note_id) as string;
+        if (seen.has(id)) return false;
+        seen.add(id);
+        return true;
+      });
+      unique.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+        ((b.created_at as string) || "").localeCompare(
+          (a.created_at as string) || "",
+        ),
+      );
+      return unique.map(mapNote);
     },
   });
 }

@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,15 +12,20 @@ import { Camera, Image, Loader2 } from "lucide-react";
 import type React from "react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { useCamera } from "../camera/useCamera";
 import { useAuth } from "../contexts/AuthContext";
-import { useGetWorker, useUpdateWorker } from "../hooks/useQueries";
+import {
+  useChangeMyPin,
+  useGetWorker,
+  useUpdateWorker,
+} from "../hooks/useQueries";
 
 export default function Profile() {
-  const { user, updateUserName, language, setLanguage } = useAuth();
+  const { user, updateUserName, updateProfilePhoto, language, setLanguage } =
+    useAuth();
   const workerId = user?.workerId || "";
   const { data: worker } = useGetWorker(workerId);
   const updateWorker = useUpdateWorker();
+  const changeMyPin = useChangeMyPin();
 
   const [name, setName] = useState(user?.name || "");
   const [nameSaving, setNameSaving] = useState(false);
@@ -34,20 +38,10 @@ export default function Profile() {
   const [pinError, setPinError] = useState("");
   const [pinSuccess, setPinSuccess] = useState(false);
 
-  // Photo
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [showCamera, setShowCamera] = useState(false);
+  // Photo — use persistent photo from auth context
+  const photoPreview = user?.profilePhoto || null;
   const galleryRef = useRef<HTMLInputElement>(null);
-
-  const {
-    videoRef,
-    canvasRef,
-    isActive,
-    startCamera,
-    stopCamera,
-    capturePhoto,
-    isLoading: camLoading,
-  } = useCamera({ facingMode: "environment" });
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveName = async () => {
     if (!name.trim()) {
@@ -87,7 +81,26 @@ export default function Profile() {
       return;
     }
 
-    if (user?.role === "worker" && worker) {
+    if (user?.role === "owner") {
+      try {
+        await changeMyPin.mutateAsync({
+          currentPin,
+          newPin,
+          workerId: user.workerId,
+        });
+        setPinSuccess(true);
+        setTimeout(() => {
+          setPinSuccess(false);
+          setPinOpen(false);
+          setCurrentPin("");
+          setNewPin("");
+          setConfirmPin("");
+        }, 1500);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Failed to change PIN";
+        setPinError(msg);
+      }
+    } else if (user?.role === "worker" && worker) {
       const storedPin = worker.pin || "0000";
       if (currentPin !== storedPin) {
         setPinError("Current PIN is incorrect");
@@ -114,29 +127,40 @@ export default function Profile() {
         const msg = e instanceof Error ? e.message : "Failed to change PIN";
         setPinError(msg);
       }
-    } else if (user?.role === "owner") {
-      setPinError("Owner PIN cannot be changed from this screen.");
     } else {
-      setPinError("Worker profile not loaded yet. Please try again.");
+      setPinError("Profile not loaded yet. Please try again.");
     }
   };
 
+  // Convert file to base64 and save persistently
+  const savePhotoFromFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      if (base64) {
+        updateProfilePhoto(base64);
+        toast.success("Profile photo saved");
+      }
+    };
+    reader.onerror = () => toast.error("Failed to read image");
+    reader.readAsDataURL(file);
+  };
+
+  // Gallery upload
   const handleGallery = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPhotoPreview(url);
-    toast.success("Profile photo updated");
+    savePhotoFromFile(file);
+    // Reset input so same file can be selected again
+    e.target.value = "";
   };
 
-  const handleCapture = async () => {
-    const file = await capturePhoto();
+  // Camera capture via native input (works on mobile)
+  const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPhotoPreview(url);
-    stopCamera();
-    setShowCamera(false);
-    toast.success("Profile photo captured");
+    savePhotoFromFile(file);
+    e.target.value = "";
   };
 
   return (
@@ -184,6 +208,7 @@ export default function Profile() {
               justifyContent: "center",
               overflow: "hidden",
               flexShrink: 0,
+              border: "2px solid #E5E7EB",
             }}
           >
             {photoPreview ? (
@@ -198,13 +223,11 @@ export default function Profile() {
               </span>
             )}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {/* Camera button — uses native camera on mobile */}
             <button
               type="button"
-              onClick={() => {
-                setShowCamera(true);
-                startCamera();
-              }}
+              onClick={() => cameraInputRef.current?.click()}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -220,6 +243,16 @@ export default function Profile() {
             >
               <Camera size={14} /> Camera
             </button>
+            {/* Hidden camera input — opens camera app on mobile */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              style={{ display: "none" }}
+              onChange={handleCameraCapture}
+            />
+
             <button
               type="button"
               onClick={() => galleryRef.current?.click()}
@@ -247,76 +280,26 @@ export default function Profile() {
             />
           </div>
         </div>
-
-        {showCamera && (
-          <div style={{ marginTop: 14 }}>
-            <div
-              style={{
-                position: "relative",
-                borderRadius: 8,
-                overflow: "hidden",
-                background: "#000",
-                minHeight: 200,
-              }}
-            >
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                style={{ width: "100%", height: "auto" }}
-              />
-              <canvas ref={canvasRef} style={{ display: "none" }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button
-                type="button"
-                onClick={handleCapture}
-                disabled={!isActive || camLoading}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "8px 14px",
-                  background: "#3B82F6",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  cursor: !isActive || camLoading ? "not-allowed" : "pointer",
-                  opacity: !isActive || camLoading ? 0.6 : 1,
-                }}
-              >
-                {camLoading ? (
-                  <Loader2
-                    size={14}
-                    style={{ animation: "spin 0.8s linear infinite" }}
-                  />
-                ) : (
-                  <Camera size={14} />
-                )}
-                Capture
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  stopCamera();
-                  setShowCamera(false);
-                }}
-                style={{
-                  padding: "8px 14px",
-                  border: "1.5px solid #D1D5DB",
-                  borderRadius: 8,
-                  background: "#fff",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  color: "#374151",
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+        {photoPreview && (
+          <button
+            type="button"
+            onClick={() => {
+              updateProfilePhoto(null);
+              toast.success("Profile photo removed");
+            }}
+            style={{
+              marginTop: 10,
+              padding: "6px 12px",
+              border: "1.5px solid #FCA5A5",
+              borderRadius: 6,
+              background: "#FFF5F5",
+              color: "#DC2626",
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            Remove Photo
+          </button>
         )}
       </div>
 
@@ -487,28 +470,22 @@ export default function Profile() {
         <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 14 }}>
           Update your login PIN (minimum 4 digits).
         </p>
-        {user?.role === "owner" ? (
-          <p style={{ fontSize: 13, color: "#9CA3AF", fontStyle: "italic" }}>
-            Owner PIN cannot be changed from this screen.
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setPinOpen(true)}
-            style={{
-              padding: "10px 20px",
-              background: "#fff",
-              color: "#374151",
-              border: "1.5px solid #D1D5DB",
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: "pointer",
-            }}
-          >
-            Change PIN
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setPinOpen(true)}
+          style={{
+            padding: "10px 20px",
+            background: "#fff",
+            color: "#374151",
+            border: "1.5px solid #D1D5DB",
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Change PIN
+        </button>
       </div>
 
       {/* Account Info */}
@@ -646,9 +623,9 @@ export default function Profile() {
               </Button>
               <Button
                 onClick={handlePinChange}
-                disabled={updateWorker.isPending}
+                disabled={updateWorker.isPending || changeMyPin.isPending}
               >
-                {updateWorker.isPending ? (
+                {updateWorker.isPending || changeMyPin.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : null}
                 Change PIN

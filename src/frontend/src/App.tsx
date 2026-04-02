@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import OwnerLayout from "./components/layout/OwnerLayout";
 import WorkerLayout from "./components/layout/WorkerLayout";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { initNotifications } from "./lib/notifications";
 import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import AttendanceManagement from "./pages/owner/AttendanceManagement";
@@ -34,6 +35,12 @@ function AppContent() {
   useEffect(() => {
     registerServiceWorker();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      initNotifications();
+    }
+  }, [isAuthenticated]);
 
   const handleNavigate = (page: string, params?: Record<string, string>) => {
     setCurrentPage(page);

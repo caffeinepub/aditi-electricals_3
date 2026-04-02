@@ -10,13 +10,13 @@
   "background_color": "#ffffff",
   "icons": [
     {
-      "src": "/assets/generated/aditi-pwa-192.dim_192x192.png",
+      "src": "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/generated/aditi-pwa-512.dim_512x512.png",
+      "src": "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

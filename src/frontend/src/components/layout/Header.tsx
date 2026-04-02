@@ -9,6 +9,7 @@ interface HeaderProps {
 
 export default function Header({ onMenuToggle, onNavigate }: HeaderProps) {
   const { user, logout } = useAuth();
+  const profilePhoto = user?.profilePhoto || null;
 
   return (
     <header
@@ -61,16 +62,44 @@ export default function Header({ onMenuToggle, onNavigate }: HeaderProps) {
               border: "none",
               color: "#fff",
               cursor: "pointer",
-              padding: "6px 12px",
-              borderRadius: 6,
+              padding: profilePhoto ? "4px 10px 4px 4px" : "6px 12px",
+              borderRadius: 20,
               fontSize: 13,
               fontWeight: 500,
               display: "flex",
               alignItems: "center",
-              gap: 6,
+              gap: 7,
             }}
           >
-            <User size={15} />
+            {/* Avatar: show profile photo if available, otherwise icon */}
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: profilePhoto
+                  ? "transparent"
+                  : "rgba(255,255,255,0.25)",
+                flexShrink: 0,
+                border: profilePhoto
+                  ? "1.5px solid rgba(255,255,255,0.6)"
+                  : "none",
+              }}
+            >
+              {profilePhoto ? (
+                <img
+                  src={profilePhoto}
+                  alt="Profile"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              ) : (
+                <User size={15} color="#fff" />
+              )}
+            </div>
             {user.name}
           </button>
         )}

@@ -47,8 +47,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/assets/generated/aditi-icon-192.dim_192x192.png',
-      badge: '/assets/generated/aditi-icon-192.dim_192x192.png',
+      icon: '/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png',
+      badge: '/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png',
       tag: data.title,
     })
   );
