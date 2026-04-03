@@ -40,10 +40,42 @@ export default function WorkerLayout({
     setSidebarOpen(false);
   };
 
+  const displayName = user?.name || "Worker";
+  const initial = displayName.charAt(0).toUpperCase();
+
+  const ProfileAvatar = () => (
+    <div
+      style={{
+        width: 38,
+        height: 38,
+        borderRadius: "50%",
+        overflow: "hidden",
+        flexShrink: 0,
+        background: user?.profilePhoto ? "transparent" : "#10B981",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "2px solid #E5E7EB",
+      }}
+    >
+      {user?.profilePhoto ? (
+        <img
+          src={user.profilePhoto}
+          alt={displayName}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : (
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 16 }}>
+          {initial}
+        </span>
+      )}
+    </div>
+  );
+
   const SidebarContent = () => (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div
-        style={{ padding: "20px 16px 12px", borderBottom: "1px solid #E5E7EB" }}
+        style={{ padding: "16px 16px 12px", borderBottom: "1px solid #E5E7EB" }}
       >
         <div
           style={{
@@ -52,22 +84,30 @@ export default function WorkerLayout({
             fontWeight: 500,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
+            marginBottom: 10,
           }}
         >
           {t(language, "workerPanel")}
         </div>
-        <div
-          style={{
-            fontSize: 15,
-            fontWeight: 600,
-            color: "#1F2937",
-            marginTop: 4,
-          }}
-        >
-          {user?.name || "Worker"}
-        </div>
-        <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>
-          {user?.workerId}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <ProfileAvatar />
+          <div>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: "#1F2937",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {displayName}
+            </div>
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 1 }}>
+              {user?.workerId}
+            </div>
+          </div>
         </div>
       </div>
 
