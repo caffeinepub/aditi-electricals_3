@@ -392,3 +392,75 @@ export const localAnnouncements = {
     );
   },
 };
+
+// --- Advance Entries ---
+export const localAdvanceEntries = {
+  getByWorkerMonth(
+    workerId: string,
+    month: number,
+    year: number,
+  ): Record<string, unknown>[] {
+    return getTable<Record<string, unknown>>("advance_entries")
+      .filter(
+        (r) => r.worker_id === workerId && r.month === month && r.year === year,
+      )
+      .sort((a, b) =>
+        (a.entry_date as string).localeCompare(b.entry_date as string),
+      );
+  },
+  insert(data: Record<string, unknown>): Record<string, unknown> {
+    const records = getTable<Record<string, unknown>>("advance_entries");
+    const record = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    records.push(record);
+    setTable("advance_entries", records);
+    return record;
+  },
+  deleteById(id: string): void {
+    setTable(
+      "advance_entries",
+      getTable<Record<string, unknown>>("advance_entries").filter(
+        (r) => r.id !== id,
+      ),
+    );
+  },
+};
+
+// --- Carry Forward Entries ---
+export const localCarryForwardEntries = {
+  getByWorkerMonth(
+    workerId: string,
+    month: number,
+    year: number,
+  ): Record<string, unknown>[] {
+    return getTable<Record<string, unknown>>("carry_forward_entries")
+      .filter(
+        (r) => r.worker_id === workerId && r.month === month && r.year === year,
+      )
+      .sort((a, b) =>
+        (a.entry_date as string).localeCompare(b.entry_date as string),
+      );
+  },
+  insert(data: Record<string, unknown>): Record<string, unknown> {
+    const records = getTable<Record<string, unknown>>("carry_forward_entries");
+    const record = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    records.push(record);
+    setTable("carry_forward_entries", records);
+    return record;
+  },
+  deleteById(id: string): void {
+    setTable(
+      "carry_forward_entries",
+      getTable<Record<string, unknown>>("carry_forward_entries").filter(
+        (r) => r.id !== id,
+      ),
+    );
+  },
+};

@@ -1,10 +1,16 @@
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 import type React from "react";
 import { useEffect, useState } from "react";
 import {
+  useAddAdvanceEntry,
+  useAddCarryForwardEntry,
   useAddSalaryRecord,
+  useDeleteAdvanceEntry,
+  useDeleteCarryForwardEntry,
+  useGetAdvanceEntries,
   useGetAllHolidays,
   useGetAllWorkers,
+  useGetCarryForwardEntries,
   useGetSalaryRecord,
   useUpdateSalaryRecord,
 } from "../../hooks/useQueries";
@@ -20,6 +26,220 @@ function parseNum(v: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+function getTodayDateStr(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+function getCurrentTimeStr(): string {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+// ---- Advance/Carry-Forward entry form ----
+interface EntryFormProps {
+  label: string;
+  workerId: string;
+  month: number;
+  year: number;
+  onClose: () => void;
+  onAdd: (amount: number, date: string, time: string) => Promise<void>;
+  isSaving: boolean;
+}
+
+function EntryForm({ label, onClose, onAdd, isSaving }: EntryFormProps) {
+  const [amountStr, setAmountStr] = useState("");
+  const [entryDate, setEntryDate] = useState(getTodayDateStr());
+  const [entryTime, setEntryTime] = useState(getCurrentTimeStr());
+  const [useCurrentTime, setUseCurrentTime] = useState(true);
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 10px",
+    border: "1.5px solid #CFCFCF",
+    borderRadius: 6,
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box",
+    background: "#fff",
+    color: "#1F2937",
+  };
+
+  const handleSave = async () => {
+    const amount = parseNum(amountStr);
+    if (amount <= 0) return;
+    const date = entryDate;
+    const time = useCurrentTime ? getCurrentTimeStr() : entryTime;
+    await onAdd(amount, date, time);
+    setAmountStr("");
+    onClose();
+  };
+
+  return (
+    <div
+      style={{
+        background: "#F9FAFB",
+        border: "1px solid #E5E7EB",
+        borderRadius: 8,
+        padding: 14,
+        marginTop: 10,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 13,
+          fontWeight: 600,
+          color: "#374151",
+          marginBottom: 10,
+        }}
+      >
+        Add {label} Entry
+      </p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label
+            htmlFor={`entry-amount-${label}`}
+            style={{
+              display: "block",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "#6B7280",
+              marginBottom: 4,
+            }}
+          >
+            Amount (₹)
+          </label>
+          <input
+            id={`entry-amount-${label}`}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={amountStr}
+            placeholder="Enter amount"
+            onChange={(e) => {
+              const v = e.target.value
+                .replace(/[^0-9]/g, "")
+                .replace(/^0+/, "");
+              setAmountStr(v);
+            }}
+            style={inputStyle}
+          />
+        </div>
+        <div>
+          <label
+            htmlFor={`entry-date-${label}`}
+            style={{
+              display: "block",
+              fontSize: 12,
+              fontWeight: 500,
+              color: "#6B7280",
+              marginBottom: 4,
+            }}
+          >
+            Date
+          </label>
+          <input
+            id={`entry-date-${label}`}
+            type="date"
+            value={entryDate}
+            onChange={(e) => setEntryDate(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
+          <input
+            type="checkbox"
+            id={`use-current-time-${label}`}
+            checked={useCurrentTime}
+            onChange={(e) => setUseCurrentTime(e.target.checked)}
+            style={{ width: 14, height: 14 }}
+          />
+          <label
+            htmlFor={`use-current-time-${label}`}
+            style={{ fontSize: 12, color: "#374151", cursor: "pointer" }}
+          >
+            Use current time
+          </label>
+        </div>
+        {!useCurrentTime && (
+          <div>
+            <label
+              htmlFor={`entry-time-${label}`}
+              style={{
+                display: "block",
+                fontSize: 12,
+                fontWeight: 500,
+                color: "#6B7280",
+                marginBottom: 4,
+              }}
+            >
+              Time
+            </label>
+            <input
+              id={`entry-time-${label}`}
+              type="time"
+              value={entryTime}
+              onChange={(e) => setEntryTime(e.target.value)}
+              style={{ ...inputStyle, width: "auto" }}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isSaving || !amountStr}
+          style={{
+            padding: "8px 16px",
+            background: isSaving || !amountStr ? "#93C5FD" : "#3B82F6",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: isSaving || !amountStr ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+          }}
+        >
+          {isSaving && (
+            <Loader2
+              size={12}
+              style={{ animation: "spin 0.8s linear infinite" }}
+            />
+          )}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            padding: "8px 16px",
+            background: "#fff",
+            color: "#374151",
+            border: "1.5px solid #D1D5DB",
+            borderRadius: 6,
+            fontSize: 13,
+            cursor: "pointer",
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SalaryManagement({
   initialWorkerId,
 }: SalaryManagementProps) {
@@ -33,12 +253,14 @@ export default function SalaryManagement({
   // Use string state so user can freely clear & type (no forced "0" blocking)
   const [presentDaysStr, setPresentDaysStr] = useState("");
   const [absentDaysStr, setAbsentDaysStr] = useState("");
-  const [advanceAmountStr, setAdvanceAmountStr] = useState("");
-  const [carryForwardStr, setCarryForwardStr] = useState("");
   const [manualOverride, setManualOverride] = useState(false);
   const [overrideNetPayStr, setOverrideNetPayStr] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Advance entry form visibility
+  const [showAdvanceForm, setShowAdvanceForm] = useState(false);
+  const [showCarryForwardForm, setShowCarryForwardForm] = useState(false);
 
   const { data: workers = [], isLoading: workersLoading } = useGetAllWorkers();
   const { data: holidays = [] } = useGetAllHolidays();
@@ -47,6 +269,23 @@ export default function SalaryManagement({
     selectedMonth,
     selectedYear,
   );
+
+  // Multi-entry advance & carry-forward
+  const { data: advanceEntries = [] } = useGetAdvanceEntries(
+    selectedWorkerId,
+    selectedMonth,
+    selectedYear,
+  );
+  const { data: carryForwardEntries = [] } = useGetCarryForwardEntries(
+    selectedWorkerId,
+    selectedMonth,
+    selectedYear,
+  );
+
+  const addAdvanceMutation = useAddAdvanceEntry();
+  const deleteAdvanceMutation = useDeleteAdvanceEntry();
+  const addCarryForwardMutation = useAddCarryForwardEntry();
+  const deleteCarryForwardMutation = useDeleteCarryForwardEntry();
 
   const addSalaryMutation = useAddSalaryRecord();
   const updateSalaryMutation = useUpdateSalaryRecord();
@@ -62,15 +301,11 @@ export default function SalaryManagement({
     if (salaryRecord) {
       setPresentDaysStr(String(Number(salaryRecord.presentDays)));
       setAbsentDaysStr(String(Number(salaryRecord.absentDays)));
-      setAdvanceAmountStr(String(Number(salaryRecord.advanceAmount)));
-      setCarryForwardStr(String(Number(salaryRecord.carryForward)));
       setManualOverride(salaryRecord.manualOverride);
       setOverrideNetPayStr(String(Number(salaryRecord.netPay)));
     } else {
       setPresentDaysStr("");
       setAbsentDaysStr("");
-      setAdvanceAmountStr("");
-      setCarryForwardStr("");
       setManualOverride(false);
       setOverrideNetPayStr("");
     }
@@ -81,9 +316,14 @@ export default function SalaryManagement({
   // Derive numeric values for calculations
   const presentDays = parseNum(presentDaysStr);
   const absentDays = parseNum(absentDaysStr);
-  const advanceAmount = parseNum(advanceAmountStr);
-  const carryForward = parseNum(carryForwardStr);
   const overrideNetPay = parseNum(overrideNetPayStr);
+
+  // Use sums from multi-entry lists
+  const totalAdvance = advanceEntries.reduce((sum, e) => sum + e.amount, 0);
+  const totalCarryForward = carryForwardEntries.reduce(
+    (sum, e) => sum + e.amount,
+    0,
+  );
 
   const monthlySalary = selectedWorker
     ? Number(selectedWorker.monthlySalary)
@@ -94,7 +334,7 @@ export default function SalaryManagement({
   const cutAmount = deductibleDays * perDaySalary;
   const calculatedNetPay = Math.max(
     0,
-    monthlySalary - cutAmount - advanceAmount + carryForward,
+    monthlySalary - cutAmount - totalAdvance + totalCarryForward,
   );
   const finalNetPay = manualOverride
     ? Math.max(0, overrideNetPay)
@@ -126,8 +366,8 @@ export default function SalaryManagement({
       presentDays,
       absentDays,
       cutDays: deductibleDays,
-      advanceAmount,
-      carryForward,
+      advanceAmount: totalAdvance,
+      carryForward: totalCarryForward,
       companyHolidays: companyHolidaysCount,
     };
 
@@ -319,7 +559,7 @@ export default function SalaryManagement({
           </div>
         ) : (
           <>
-            {/* Salary Inputs */}
+            {/* Attendance Inputs */}
             <div style={cardStyle}>
               <h2
                 style={{
@@ -359,7 +599,6 @@ export default function SalaryManagement({
                     value={presentDaysStr}
                     placeholder="0"
                     onChange={(e) => {
-                      // Allow only digits
                       const v = e.target.value.replace(/[^0-9]/g, "");
                       setPresentDaysStr(v);
                     }}
@@ -395,72 +634,6 @@ export default function SalaryManagement({
                     onChange={(e) => {
                       const v = e.target.value.replace(/[^0-9]/g, "");
                       setAbsentDaysStr(v);
-                    }}
-                    style={inputStyle}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#3B82F6";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#CFCFCF";
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="salary-advance"
-                    style={{
-                      display: "block",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "#374151",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Advance (₹)
-                  </label>
-                  <input
-                    id="salary-advance"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={advanceAmountStr}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, "");
-                      setAdvanceAmountStr(v);
-                    }}
-                    style={inputStyle}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = "#3B82F6";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = "#CFCFCF";
-                    }}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="salary-carry-forward"
-                    style={{
-                      display: "block",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: "#374151",
-                      marginBottom: 6,
-                    }}
-                  >
-                    Carry Forward (₹)
-                  </label>
-                  <input
-                    id="salary-carry-forward"
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    value={carryForwardStr}
-                    placeholder="0"
-                    onChange={(e) => {
-                      const v = e.target.value.replace(/[^0-9]/g, "");
-                      setCarryForwardStr(v);
                     }}
                     style={inputStyle}
                     onFocus={(e) => {
@@ -536,6 +709,306 @@ export default function SalaryManagement({
               )}
             </div>
 
+            {/* ---- Advance Entries ---- */}
+            <div style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <h2 style={{ fontSize: 15, fontWeight: 600, color: "#1F2937" }}>
+                  Advance Entries
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAdvanceForm((v) => !v);
+                    setShowCarryForwardForm(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "6px 12px",
+                    background: "#3B82F6",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={12} /> Add Advance
+                </button>
+              </div>
+
+              {showAdvanceForm && (
+                <EntryForm
+                  label="Advance"
+                  workerId={selectedWorkerId}
+                  month={selectedMonth}
+                  year={selectedYear}
+                  onClose={() => setShowAdvanceForm(false)}
+                  onAdd={async (amount, date, time) => {
+                    await addAdvanceMutation.mutateAsync({
+                      workerId: selectedWorkerId,
+                      month: selectedMonth,
+                      year: selectedYear,
+                      amount,
+                      entryDate: date,
+                      entryTime: time,
+                    });
+                  }}
+                  isSaving={addAdvanceMutation.isPending}
+                />
+              )}
+
+              {advanceEntries.length === 0 ? (
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "#9CA3AF",
+                    marginTop: showAdvanceForm ? 10 : 0,
+                  }}
+                >
+                  No advance entries for this month.
+                </p>
+              ) : (
+                <div style={{ marginTop: showAdvanceForm ? 10 : 0 }}>
+                  {advanceEntries.map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 0",
+                        borderBottom:
+                          idx < advanceEntries.length - 1
+                            ? "1px solid #F3F4F6"
+                            : "none",
+                        fontSize: 13,
+                      }}
+                    >
+                      <span style={{ color: "#374151" }}>
+                        <span style={{ fontWeight: 500 }}>
+                          {entry.entryDate}
+                        </span>{" "}
+                        <span style={{ color: "#9CA3AF" }}>
+                          {entry.entryTime}
+                        </span>
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#1F2937" }}>
+                          ₹{entry.amount.toLocaleString("en-IN")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteAdvanceMutation.mutate({
+                              id: entry.id,
+                              workerId: selectedWorkerId,
+                              month: selectedMonth,
+                              year: selectedYear,
+                            })
+                          }
+                          disabled={deleteAdvanceMutation.isPending}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#EF4444",
+                            padding: 2,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div
+                    style={{
+                      marginTop: 10,
+                      paddingTop: 8,
+                      borderTop: "2px solid #E5E7EB",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span style={{ color: "#374151" }}>Total Advance</span>
+                    <span style={{ color: "#1F2937" }}>
+                      ₹{totalAdvance.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ---- Carry Forward Entries ---- */}
+            <div style={cardStyle}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 12,
+                }}
+              >
+                <h2 style={{ fontSize: 15, fontWeight: 600, color: "#1F2937" }}>
+                  Carry Forward Entries
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCarryForwardForm((v) => !v);
+                    setShowAdvanceForm(false);
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: "6px 12px",
+                    background: "#059669",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Plus size={12} /> Add Carry Forward
+                </button>
+              </div>
+
+              {showCarryForwardForm && (
+                <EntryForm
+                  label="Carry Forward"
+                  workerId={selectedWorkerId}
+                  month={selectedMonth}
+                  year={selectedYear}
+                  onClose={() => setShowCarryForwardForm(false)}
+                  onAdd={async (amount, date, time) => {
+                    await addCarryForwardMutation.mutateAsync({
+                      workerId: selectedWorkerId,
+                      month: selectedMonth,
+                      year: selectedYear,
+                      amount,
+                      entryDate: date,
+                      entryTime: time,
+                    });
+                  }}
+                  isSaving={addCarryForwardMutation.isPending}
+                />
+              )}
+
+              {carryForwardEntries.length === 0 ? (
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "#9CA3AF",
+                    marginTop: showCarryForwardForm ? 10 : 0,
+                  }}
+                >
+                  No carry forward entries for this month.
+                </p>
+              ) : (
+                <div style={{ marginTop: showCarryForwardForm ? 10 : 0 }}>
+                  {carryForwardEntries.map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 0",
+                        borderBottom:
+                          idx < carryForwardEntries.length - 1
+                            ? "1px solid #F3F4F6"
+                            : "none",
+                        fontSize: 13,
+                      }}
+                    >
+                      <span style={{ color: "#374151" }}>
+                        <span style={{ fontWeight: 500 }}>
+                          {entry.entryDate}
+                        </span>{" "}
+                        <span style={{ color: "#9CA3AF" }}>
+                          {entry.entryTime}
+                        </span>
+                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: "#1F2937" }}>
+                          ₹{entry.amount.toLocaleString("en-IN")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteCarryForwardMutation.mutate({
+                              id: entry.id,
+                              workerId: selectedWorkerId,
+                              month: selectedMonth,
+                              year: selectedYear,
+                            })
+                          }
+                          disabled={deleteCarryForwardMutation.isPending}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            color: "#EF4444",
+                            padding: 2,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div
+                    style={{
+                      marginTop: 10,
+                      paddingTop: 8,
+                      borderTop: "2px solid #E5E7EB",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span style={{ color: "#374151" }}>
+                      Total Carry Forward
+                    </span>
+                    <span style={{ color: "#1F2937" }}>
+                      ₹{totalCarryForward.toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Salary Breakdown */}
             <div style={cardStyle}>
               <h2
@@ -569,12 +1042,12 @@ export default function SalaryManagement({
                     value: `₹${Math.abs(cutAmount).toFixed(2)}`,
                   },
                   {
-                    label: "Advance",
-                    value: `₹${Math.abs(advanceAmount).toLocaleString("en-IN")}`,
+                    label: `Advance (${advanceEntries.length} entries)`,
+                    value: `₹${totalAdvance.toLocaleString("en-IN")}`,
                   },
                   {
-                    label: "Carry Forward",
-                    value: `₹${carryForward.toLocaleString("en-IN")}`,
+                    label: `Carry Forward (${carryForwardEntries.length} entries)`,
+                    value: `₹${totalCarryForward.toLocaleString("en-IN")}`,
                   },
                   {
                     label: "Company Holidays (this month)",

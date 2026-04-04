@@ -164,3 +164,37 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here
 - **"Database tables not found"** → Run the SQL setup script above
 - **"Employee ID not found"** → Run the INSERT statements to create default users
 - **"Incorrect PIN"** → Use PIN `1234` for both default accounts
+
+## New Tables: Advance & Carry Forward Entries
+
+Run this SQL in your Supabase SQL Editor to add support for multiple advance and carry-forward entries per worker per month:
+
+```sql
+-- Advance entries (multiple per worker per month)
+CREATE TABLE IF NOT EXISTS advance_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  worker_id TEXT NOT NULL REFERENCES workers(worker_id) ON DELETE CASCADE,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  entry_date DATE NOT NULL,
+  entry_time TEXT NOT NULL DEFAULT '00:00',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Carry forward entries (multiple per worker per month)
+CREATE TABLE IF NOT EXISTS carry_forward_entries (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  worker_id TEXT NOT NULL REFERENCES workers(worker_id) ON DELETE CASCADE,
+  month INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  entry_date DATE NOT NULL,
+  entry_time TEXT NOT NULL DEFAULT '00:00',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Disable RLS for new tables
+ALTER TABLE advance_entries DISABLE ROW LEVEL SECURITY;
+ALTER TABLE carry_forward_entries DISABLE ROW LEVEL SECURITY;
+```

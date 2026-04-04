@@ -1223,3 +1223,263 @@ export function useLinkWorkerPrincipal() {
     },
   });
 }
+
+// ---- Advance Entries ----
+
+export interface AdvanceEntry {
+  id: string;
+  workerId: string;
+  month: number;
+  year: number;
+  amount: number;
+  entryDate: string;
+  entryTime: string;
+  createdAt: string;
+}
+
+export function useGetAdvanceEntries(
+  workerId: string,
+  month: number,
+  year: number,
+) {
+  return useQuery<AdvanceEntry[]>({
+    queryKey: ["advanceEntries", workerId, month, year],
+    queryFn: async () => {
+      if (!workerId) return [];
+      if (!isSupabaseConfigured()) {
+        const { localAdvanceEntries } = await import("../lib/localDb");
+        const { mapAdvanceEntry } = await import("../lib/supabase");
+        return localAdvanceEntries
+          .getByWorkerMonth(workerId, month, year)
+          .map(mapAdvanceEntry);
+      }
+      const { mapAdvanceEntry } = await import("../lib/supabase");
+      const { data, error } = await supabase
+        .from("advance_entries")
+        .select("*")
+        .eq("worker_id", workerId)
+        .eq("month", month)
+        .eq("year", year)
+        .order("entry_date");
+      if (error) throw error;
+      return (data || []).map(mapAdvanceEntry);
+    },
+    enabled: !!workerId,
+  });
+}
+
+export function useAddAdvanceEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workerId,
+      month,
+      year,
+      amount,
+      entryDate,
+      entryTime,
+    }: {
+      workerId: string;
+      month: number;
+      year: number;
+      amount: number;
+      entryDate: string;
+      entryTime: string;
+    }) => {
+      if (!isSupabaseConfigured()) {
+        const { localAdvanceEntries } = await import("../lib/localDb");
+        const record = localAdvanceEntries.insert({
+          worker_id: workerId,
+          month,
+          year,
+          amount,
+          entry_date: entryDate,
+          entry_time: entryTime,
+        });
+        return record.id as string;
+      }
+      const { data, error } = await supabase
+        .from("advance_entries")
+        .insert({
+          worker_id: workerId,
+          month,
+          year,
+          amount,
+          entry_date: entryDate,
+          entry_time: entryTime,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return (data as Record<string, unknown>)!.id as string;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["advanceEntries", vars.workerId, vars.month, vars.year],
+      });
+    },
+  });
+}
+
+export function useDeleteAdvanceEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      workerId: _workerId,
+      month: _month,
+      year: _year,
+    }: {
+      id: string;
+      workerId: string;
+      month: number;
+      year: number;
+    }) => {
+      if (!isSupabaseConfigured()) {
+        const { localAdvanceEntries } = await import("../lib/localDb");
+        localAdvanceEntries.deleteById(id);
+        return;
+      }
+      const { error } = await supabase
+        .from("advance_entries")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["advanceEntries", vars.workerId, vars.month, vars.year],
+      });
+    },
+  });
+}
+
+// ---- Carry Forward Entries ----
+
+export interface CarryForwardEntry {
+  id: string;
+  workerId: string;
+  month: number;
+  year: number;
+  amount: number;
+  entryDate: string;
+  entryTime: string;
+  createdAt: string;
+}
+
+export function useGetCarryForwardEntries(
+  workerId: string,
+  month: number,
+  year: number,
+) {
+  return useQuery<CarryForwardEntry[]>({
+    queryKey: ["carryForwardEntries", workerId, month, year],
+    queryFn: async () => {
+      if (!workerId) return [];
+      if (!isSupabaseConfigured()) {
+        const { localCarryForwardEntries } = await import("../lib/localDb");
+        const { mapCarryForwardEntry } = await import("../lib/supabase");
+        return localCarryForwardEntries
+          .getByWorkerMonth(workerId, month, year)
+          .map(mapCarryForwardEntry);
+      }
+      const { mapCarryForwardEntry } = await import("../lib/supabase");
+      const { data, error } = await supabase
+        .from("carry_forward_entries")
+        .select("*")
+        .eq("worker_id", workerId)
+        .eq("month", month)
+        .eq("year", year)
+        .order("entry_date");
+      if (error) throw error;
+      return (data || []).map(mapCarryForwardEntry);
+    },
+    enabled: !!workerId,
+  });
+}
+
+export function useAddCarryForwardEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workerId,
+      month,
+      year,
+      amount,
+      entryDate,
+      entryTime,
+    }: {
+      workerId: string;
+      month: number;
+      year: number;
+      amount: number;
+      entryDate: string;
+      entryTime: string;
+    }) => {
+      if (!isSupabaseConfigured()) {
+        const { localCarryForwardEntries } = await import("../lib/localDb");
+        const record = localCarryForwardEntries.insert({
+          worker_id: workerId,
+          month,
+          year,
+          amount,
+          entry_date: entryDate,
+          entry_time: entryTime,
+        });
+        return record.id as string;
+      }
+      const { data, error } = await supabase
+        .from("carry_forward_entries")
+        .insert({
+          worker_id: workerId,
+          month,
+          year,
+          amount,
+          entry_date: entryDate,
+          entry_time: entryTime,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return (data as Record<string, unknown>)!.id as string;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["carryForwardEntries", vars.workerId, vars.month, vars.year],
+      });
+    },
+  });
+}
+
+export function useDeleteCarryForwardEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      workerId: _workerId,
+      month: _month,
+      year: _year,
+    }: {
+      id: string;
+      workerId: string;
+      month: number;
+      year: number;
+    }) => {
+      if (!isSupabaseConfigured()) {
+        const { localCarryForwardEntries } = await import("../lib/localDb");
+        localCarryForwardEntries.deleteById(id);
+        return;
+      }
+      const { error } = await supabase
+        .from("carry_forward_entries")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({
+        queryKey: ["carryForwardEntries", vars.workerId, vars.month, vars.year],
+      });
+    },
+  });
+}

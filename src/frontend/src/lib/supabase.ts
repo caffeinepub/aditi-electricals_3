@@ -1,6 +1,6 @@
 // Minimal Supabase REST client — no external package required
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 if (!supabaseUrl || supabaseUrl === "undefined") {
@@ -12,6 +12,12 @@ if (!supabaseAnonKey || supabaseAnonKey === "undefined") {
 
 const BASE_URL = supabaseUrl || "https://placeholder.supabase.co";
 const ANON_KEY = supabaseAnonKey || "placeholder";
+
+// True when the app is running in local-only mode (no real Supabase configured)
+export const isLocalOnlyMode =
+  !supabaseUrl ||
+  supabaseUrl === "undefined" ||
+  supabaseUrl.includes("placeholder");
 
 export type DbError = { message: string; code?: string } | null;
 export type DbResult<T> = { data: T | null; error: DbError };
@@ -399,5 +405,31 @@ export function mapConfirmation(row: Record<string, unknown>) {
     confirmedAt: row.confirmed_at
       ? BigInt(new Date(row.confirmed_at as string).getTime())
       : undefined,
+  };
+}
+
+export function mapAdvanceEntry(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    workerId: row.worker_id as string,
+    month: row.month as number,
+    year: row.year as number,
+    amount: Number(row.amount) || 0,
+    entryDate: row.entry_date as string,
+    entryTime: (row.entry_time as string) || "00:00",
+    createdAt: (row.created_at as string) || new Date().toISOString(),
+  };
+}
+
+export function mapCarryForwardEntry(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    workerId: row.worker_id as string,
+    month: row.month as number,
+    year: row.year as number,
+    amount: Number(row.amount) || 0,
+    entryDate: row.entry_date as string,
+    entryTime: (row.entry_time as string) || "00:00",
+    createdAt: (row.created_at as string) || new Date().toISOString(),
   };
 }

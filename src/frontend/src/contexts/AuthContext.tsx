@@ -6,8 +6,8 @@ import React, {
   type ReactNode,
 } from "react";
 import type { Language } from "../lib/i18n";
-import { isSupabaseConfigured, localWorkers } from "../lib/localDb";
-import { supabase } from "../lib/supabase";
+import { localWorkers } from "../lib/localDb";
+import { isLocalOnlyMode, supabase } from "../lib/supabase";
 
 export type { Language };
 export type UserRole = "owner" | "worker";
@@ -91,8 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const trimmedId = workerId.trim().toUpperCase();
       const trimmedPin = pin.trim();
 
-      // Use localStorage fallback when Supabase is not configured
-      if (!isSupabaseConfigured()) {
+      // ── LOCAL-ONLY MODE ──────────────────────────────────────────────────────
+      // Only use localStorage when Supabase is genuinely not configured
+      // (no URL set, or URL is a placeholder). This prevents the cross-device
+      // login bug where workers added on one device were invisible on others.
+      if (isLocalOnlyMode) {
         const worker = localWorkers.getByIdForLogin(trimmedId);
         if (!worker) {
           return {
@@ -139,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       }
 
-      // Supabase login
+      // ── SUPABASE LOGIN (all devices, real database) ───────────────────────────
       const { data, error } = await supabase
         .from("workers")
         .select("worker_id, name, pin, role, active")
