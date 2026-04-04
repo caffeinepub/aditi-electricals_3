@@ -10,16 +10,22 @@ import type React from "react";
 import { useState } from "react";
 import { type AttendanceRecord, AttendanceStatus } from "../../backend";
 import AttendanceCalendar from "../../components/AttendanceCalendar";
+import EveningLocationsMap from "../../components/owner/EveningLocationsMap";
 import {
   useGetAllHolidays,
   useGetAllWorkers,
   useGetAttendanceByWorkerForMonth,
+  useGetEveningLocationsByDate,
   useOwnerAddAttendance,
   useOwnerDeleteAttendance,
   useOwnerGetAttendanceByWorkerForMonth,
   useOwnerUpdateAttendance,
 } from "../../hooks/useQueries";
-import { getCurrentMonthYear, getMonthName } from "../../utils/dateUtils";
+import {
+  getCurrentMonthYear,
+  getMonthName,
+  getTodayString,
+} from "../../utils/dateUtils";
 
 interface Props {
   initialWorkerId?: string | null;
@@ -128,9 +134,13 @@ function LocationPreview({
 
 export default function AttendanceManagement({ initialWorkerId }: Props) {
   const { month: curMonth, year: curYear } = getCurrentMonthYear();
+  const today = getTodayString();
   const { data: workers = [] } = useGetAllWorkers();
   const { data: holidays = [] } = useGetAllHolidays();
 
+  const [activeTab, setActiveTab] = useState<"attendance" | "evening">(
+    "attendance",
+  );
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(
     initialWorkerId || null,
   );
@@ -142,21 +152,22 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
     null,
   );
   const [actionError, setActionError] = useState("");
+  const [eveningDate, setEveningDate] = useState(today);
 
   const selectedWorker = workers.find((w) => w.workerId === selectedWorkerId);
 
-  // ── SHARED DATA SOURCE ──────────────────────────────────────────────────────
-  // Use the same endpoint as workers so both views read from ONE data store.
   const {
     data: calendarRecords = [],
     isLoading: attendanceLoading,
     refetch: refetchCalendar,
   } = useGetAttendanceByWorkerForMonth(selectedWorkerId || "", month, year);
 
-  // Owner-only endpoint returns full records (with location/photo) for the dialog.
   const { data: ownerRecords = [], refetch: refetchOwnerRecords } =
     useOwnerGetAttendanceByWorkerForMonth(selectedWorkerId || "", month, year);
-  // ────────────────────────────────────────────────────────────────────────────
+
+  // Evening locations for selected date (owner sees all workers)
+  const { data: eveningLocations = [] } =
+    useGetEveningLocationsByDate(eveningDate);
 
   const addAttendance = useOwnerAddAttendance();
   const updateAttendance = useOwnerUpdateAttendance();
@@ -176,8 +187,6 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
   };
 
   const handleDateClick = (date: string) => {
-    // Use the full owner record (has location/photo) when available;
-    // fall back to the shared calendar record for status info.
     const fullRecord =
       ownerRecords.find((r) => r.date === date) ||
       (calendarRecords.find(
@@ -243,27 +252,64 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
     existingRecord.latitude != null &&
     existingRecord.longitude != null;
 
-  const _cardStyle: React.CSSProperties = {
-    background: "#fff",
-    borderRadius: 10,
-    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-    padding: 20,
-    marginBottom: 16,
-  };
+  const tabStyle = (tab: string): React.CSSProperties => ({
+    padding: "8px 18px",
+    fontSize: 13,
+    fontWeight: 600,
+    border: "none",
+    borderBottom: `2px solid ${activeTab === tab ? "#3B82F6" : "transparent"}`,
+    color: activeTab === tab ? "#3B82F6" : "#6B7280",
+    background: "transparent",
+    cursor: "pointer",
+  });
 
-  if (!selectedWorkerId) {
+  if (!selectedWorkerId && activeTab === "attendance") {
     return (
       <div>
-        <h2
+        <div
           style={{
-            fontSize: 22,
-            fontWeight: 700,
-            color: "#1F2937",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
             marginBottom: 8,
           }}
         >
-          Attendance Management
-        </h2>
+          <h2
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#1F2937",
+              margin: 0,
+            }}
+          >
+            Attendance Management
+          </h2>
+        </div>
+
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid #E5E7EB",
+            marginBottom: 20,
+          }}
+        >
+          <button
+            type="button"
+            style={tabStyle("attendance")}
+            onClick={() => setActiveTab("attendance")}
+          >
+            📅 Attendance
+          </button>
+          <button
+            type="button"
+            style={tabStyle("evening")}
+            onClick={() => setActiveTab("evening")}
+          >
+            🌆 Evening Locations
+          </button>
+        </div>
+
         <p style={{ color: "#6B7280", fontSize: 14, marginBottom: 20 }}>
           Select a worker to view and manage their attendance.
         </p>
@@ -303,6 +349,113 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
     );
   }
 
+  // Evening locations view
+  if (activeTab === "evening") {
+    return (
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 8,
+          }}
+        >
+          {selectedWorkerId && (
+            <button
+              type="button"
+              onClick={() => setSelectedWorkerId(null)}
+              style={{
+                background: "#F3F4F6",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 12px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 13,
+                color: "#374151",
+              }}
+            >
+              <ChevronLeft size={16} /> Back
+            </button>
+          )}
+          <h2
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: "#1F2937",
+              margin: 0,
+            }}
+          >
+            Worker Locations
+          </h2>
+        </div>
+
+        {/* Tabs */}
+        <div
+          style={{
+            display: "flex",
+            borderBottom: "1px solid #E5E7EB",
+            marginBottom: 20,
+          }}
+        >
+          <button
+            type="button"
+            style={tabStyle("attendance")}
+            onClick={() => setActiveTab("attendance")}
+          >
+            📅 Attendance
+          </button>
+          <button
+            type="button"
+            style={tabStyle("evening")}
+            onClick={() => setActiveTab("evening")}
+          >
+            🌆 Evening Locations
+          </button>
+        </div>
+
+        {/* Date selector */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            htmlFor="evening-date-input"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#374151",
+              display: "block",
+              marginBottom: 6,
+            }}
+          >
+            Select Date:
+          </label>
+          <input
+            id="evening-date-input"
+            type="date"
+            value={eveningDate}
+            onChange={(e) => setEveningDate(e.target.value)}
+            style={{
+              border: "1px solid #D1D5DB",
+              borderRadius: 8,
+              padding: "8px 12px",
+              fontSize: 13,
+              color: "#374151",
+              background: "#fff",
+            }}
+          />
+        </div>
+
+        <EveningLocationsMap
+          locations={eveningLocations}
+          workers={workers}
+          date={eveningDate}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       {/* Header */}
@@ -311,7 +464,7 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
           display: "flex",
           alignItems: "center",
           gap: 12,
-          marginBottom: 20,
+          marginBottom: 8,
         }}
       >
         <button
@@ -347,6 +500,30 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
             {selectedWorkerId}
           </p>
         </div>
+      </div>
+
+      {/* Tabs */}
+      <div
+        style={{
+          display: "flex",
+          borderBottom: "1px solid #E5E7EB",
+          marginBottom: 20,
+        }}
+      >
+        <button
+          type="button"
+          style={tabStyle("attendance")}
+          onClick={() => setActiveTab("attendance")}
+        >
+          📅 Attendance
+        </button>
+        <button
+          type="button"
+          style={tabStyle("evening")}
+          onClick={() => setActiveTab("evening")}
+        >
+          🌆 Evening Locations
+        </button>
       </div>
 
       {/* Month Navigation */}
@@ -401,14 +578,13 @@ export default function AttendanceManagement({ initialWorkerId }: Props) {
         </button>
       </div>
 
-      {/* Calendar — uses shared attendance records (same data source as worker) */}
       {attendanceLoading ? (
         <div style={{ textAlign: "center", padding: 40, color: "#6B7280" }}>
           Loading attendance...
         </div>
       ) : (
         <AttendanceCalendar
-          workerId={selectedWorkerId}
+          workerId={selectedWorkerId ?? ""}
           month={month}
           year={year}
           attendanceRecords={calendarRecords}

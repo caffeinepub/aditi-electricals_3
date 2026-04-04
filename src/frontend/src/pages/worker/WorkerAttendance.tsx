@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type React from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AttendanceStatus, ExternalBlob } from "../../backend";
 import { useCamera } from "../../camera/useCamera";
 import AttendanceCalendar from "../../components/AttendanceCalendar";
@@ -10,6 +10,7 @@ import {
   useGetAttendanceByWorker,
   useGetAttendanceByWorkerForMonth,
   useMarkAttendance,
+  useSaveEveningLocation,
 } from "../../hooks/useQueries";
 import {
   formatDate,
@@ -19,6 +20,39 @@ import {
   isWithinAttendanceWindow,
 } from "../../utils/dateUtils";
 
+// Request geolocation permission and return coords, or null if denied/unavailable
+function captureGPS(): Promise<{ lat: number; lng: number } | null> {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 12000, enableHighAccuracy: true },
+    );
+  });
+}
+
+// How many minutes until 9:00 AM (returns negative if past)
+function minutesUntilNineAM(): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(9, 0, 0, 0);
+  return Math.ceil((target.getTime() - now.getTime()) / 60000);
+}
+
+function getAttendanceWindowStatus(): "before" | "open" | "closed" {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const total = h * 60 + m;
+  if (total < 9 * 60) return "before";
+  if (total <= 9 * 60 + 30) return "open";
+  return "closed";
+}
+
 export default function WorkerAttendance() {
   const { user } = useAuth();
   const workerId = user?.workerId ?? "";
@@ -27,19 +61,18 @@ export default function WorkerAttendance() {
   const [calMonth, setCalMonth] = useState(curMonth);
   const [calYear, setCalYear] = useState(curYear);
 
-  // Used only to check today's status (always current data)
   const { data: allRecords = [], isLoading } =
     useGetAttendanceByWorker(workerId);
-
-  // Month-specific records for the calendar — auto-refetches when calMonth/calYear change
   const { data: calendarRecords = [] } = useGetAttendanceByWorkerForMonth(
     workerId,
     calMonth,
     calYear,
   );
-
   const { data: holidays = [] } = useGetAllHolidays();
   const markAttendanceMutation = useMarkAttendance();
+  const saveEveningLocation = useSaveEveningLocation();
+  const saveEveningLocationRef = useRef(saveEveningLocation.mutateAsync);
+  saveEveningLocationRef.current = saveEveningLocation.mutateAsync;
 
   const [showCamera, setShowCamera] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<File | null>(null);
@@ -54,7 +87,53 @@ export default function WorkerAttendance() {
     "idle" | "photo" | "confirming"
   >("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [windowStatus, setWindowStatus] = useState(getAttendanceWindowStatus);
+  const [eveningCaptured, setEveningCaptured] = useState(false);
+  const [eveningStatus, setEveningStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Re-check window status every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWindowStatus(getAttendanceWindowStatus());
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Schedule 4 PM evening location capture
+  useEffect(() => {
+    if (!workerId) return;
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(16, 0, 0, 0);
+    // If already past 4PM today, don't schedule
+    if (target.getTime() <= now.getTime()) return;
+    const msUntil = target.getTime() - now.getTime();
+    const timer = setTimeout(async () => {
+      // Request permission if not already granted
+      if ("geolocation" in navigator) {
+        setEveningStatus("Capturing evening location...");
+        const loc = await captureGPS();
+        if (loc) {
+          try {
+            await saveEveningLocationRef.current({
+              workerId,
+              date: getTodayString(),
+              latitude: loc.lat,
+              longitude: loc.lng,
+            });
+            setEveningCaptured(true);
+            setEveningStatus("Evening location saved ✓");
+          } catch {
+            setEveningStatus("Evening location save failed.");
+          }
+        } else {
+          setEveningStatus("Evening location: permission denied.");
+        }
+      }
+    }, msUntil);
+    return () => clearTimeout(timer);
+  }, [workerId]);
 
   const {
     isActive,
@@ -68,7 +147,8 @@ export default function WorkerAttendance() {
   } = useCamera({ facingMode: "environment", quality: 0.8 });
 
   const todayRecord = allRecords.find((r) => r.date === today);
-  const canMark = isWithinAttendanceWindow() && !todayRecord;
+  // Use derived window status for button enable
+  const canMark = windowStatus === "open" && !todayRecord;
 
   const getGPS = (): Promise<{ lat: number; lng: number } | null> => {
     return new Promise((resolve) => {
@@ -94,6 +174,16 @@ export default function WorkerAttendance() {
   };
 
   const handleStartMarkAttendance = async () => {
+    // Hard block outside window
+    const status = getAttendanceWindowStatus();
+    if (status !== "open") {
+      alert(
+        status === "before"
+          ? `Attendance window opens at 9:00 AM. Please come back in ${minutesUntilNineAM()} minute(s).`
+          : "Attendance window closed at 9:30 AM. You can no longer mark attendance for today.",
+      );
+      return;
+    }
     setMarkingStep("photo");
     setShowCamera(false);
     setCapturedPhoto(null);
@@ -128,6 +218,15 @@ export default function WorkerAttendance() {
   };
 
   const handleConfirmAttendance = async () => {
+    // Hard block outside window at submit time too
+    const status = getAttendanceWindowStatus();
+    if (status !== "open") {
+      setMarkingStep("idle");
+      alert(
+        "Attendance window is closed. Attendance cannot be marked outside 9:00 AM – 9:30 AM.",
+      );
+      return;
+    }
     setMarkingStep("confirming");
     try {
       let photoBlob: ExternalBlob | null = null;
@@ -154,9 +253,9 @@ export default function WorkerAttendance() {
       setCoords(null);
       setGpsStatus("idle");
       setUploadProgress(0);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setMarkingStep("idle");
-      alert(err?.message || "Failed to mark attendance.");
+      alert(err instanceof Error ? err.message : "Failed to mark attendance.");
     }
   };
 
@@ -212,6 +311,77 @@ export default function WorkerAttendance() {
     fontSize: 14,
     fontWeight: 500,
     cursor: "pointer",
+  };
+
+  const renderWindowBanner = () => {
+    if (todayRecord) return null;
+    if (windowStatus === "before") {
+      const mins = minutesUntilNineAM();
+      return (
+        <div
+          style={{
+            background: "#EFF6FF",
+            border: "1px solid #BFDBFE",
+            borderRadius: 8,
+            padding: "10px 14px",
+            marginBottom: 12,
+          }}
+        >
+          <p
+            style={{
+              color: "#1E40AF",
+              fontSize: 14,
+              margin: 0,
+              fontWeight: 500,
+            }}
+          >
+            ⏰ Attendance opens at 9:00 AM
+            {mins > 0 ? ` (in ${mins} minute${mins !== 1 ? "s" : ""})` : ""}
+          </p>
+        </div>
+      );
+    }
+    if (windowStatus === "closed") {
+      return (
+        <div
+          style={{
+            background: "#FEF2F2",
+            border: "1px solid #FECACA",
+            borderRadius: 8,
+            padding: "10px 14px",
+            marginBottom: 12,
+          }}
+        >
+          <p
+            style={{
+              color: "#991B1B",
+              fontSize: 14,
+              margin: 0,
+              fontWeight: 500,
+            }}
+          >
+            🔒 Attendance window closed at 9:30 AM.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div
+        style={{
+          background: "#F0FDF4",
+          border: "1px solid #BBF7D0",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 12,
+        }}
+      >
+        <p
+          style={{ color: "#166534", fontSize: 14, margin: 0, fontWeight: 500 }}
+        >
+          ✅ Attendance window is open (9:00 AM – 9:30 AM)
+        </p>
+      </div>
+    );
   };
 
   return (
@@ -284,6 +454,7 @@ export default function WorkerAttendance() {
           </div>
         ) : markingStep === "idle" ? (
           <div>
+            {renderWindowBanner()}
             {canMark ? (
               <button
                 type="button"
@@ -292,7 +463,7 @@ export default function WorkerAttendance() {
               >
                 Mark Attendance
               </button>
-            ) : (
+            ) : windowStatus !== "open" ? null : (
               <div
                 style={{
                   background: "#FEF2F2",
@@ -309,9 +480,7 @@ export default function WorkerAttendance() {
                     fontWeight: 500,
                   }}
                 >
-                  {todayRecord
-                    ? "Attendance already marked."
-                    : "Attendance window is 9:00 AM – 9:30 AM only."}
+                  Attendance already marked.
                 </p>
               </div>
             )}
@@ -506,7 +675,22 @@ export default function WorkerAttendance() {
         ) : null}
       </div>
 
-      {/* Calendar — uses month-specific records (same shared endpoint as owner) */}
+      {/* Evening location status */}
+      {eveningStatus && (
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <p
+            style={{
+              fontSize: 13,
+              color: eveningCaptured ? "#166534" : "#6B7280",
+              margin: 0,
+            }}
+          >
+            🌆 {eveningStatus}
+          </p>
+        </div>
+      )}
+
+      {/* Calendar */}
       <div style={cardStyle}>
         <div
           style={{

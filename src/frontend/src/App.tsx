@@ -38,9 +38,9 @@ function AppContent() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      initNotifications();
+      initNotifications(user?.role);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.role]);
 
   const handleNavigate = (page: string, params?: Record<string, string>) => {
     setCurrentPage(page);

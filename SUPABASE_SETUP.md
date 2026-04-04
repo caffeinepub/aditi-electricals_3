@@ -198,3 +198,24 @@ CREATE TABLE IF NOT EXISTS carry_forward_entries (
 ALTER TABLE advance_entries DISABLE ROW LEVEL SECURITY;
 ALTER TABLE carry_forward_entries DISABLE ROW LEVEL SECURITY;
 ```
+
+## New Table: Evening Locations
+
+Run this SQL in your Supabase SQL Editor to enable worker evening (4:00 PM) location tracking:
+
+```sql
+-- Evening locations: captured once at 4:00 PM per worker per day
+CREATE TABLE IF NOT EXISTS evening_locations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  worker_id TEXT NOT NULL REFERENCES workers(worker_id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  captured_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(worker_id, date)
+);
+
+-- Disable RLS for this table
+ALTER TABLE evening_locations DISABLE ROW LEVEL SECURITY;
+```

@@ -464,3 +464,44 @@ export const localCarryForwardEntries = {
     );
   },
 };
+
+// --- Evening Locations ---
+export const localEveningLocations = {
+  getAll(): Record<string, unknown>[] {
+    return getTable<Record<string, unknown>>("evening_locations");
+  },
+  getByDate(date: string): Record<string, unknown>[] {
+    return getTable<Record<string, unknown>>("evening_locations").filter(
+      (r) => r.date === date,
+    );
+  },
+  getByWorkerDate(
+    workerId: string,
+    date: string,
+  ): Record<string, unknown> | null {
+    return (
+      getTable<Record<string, unknown>>("evening_locations").find(
+        (r) => r.worker_id === workerId && r.date === date,
+      ) || null
+    );
+  },
+  upsert(data: Record<string, unknown>): Record<string, unknown> {
+    const records = getTable<Record<string, unknown>>("evening_locations");
+    const existing = records.findIndex(
+      (r) => r.worker_id === data.worker_id && r.date === data.date,
+    );
+    if (existing !== -1) {
+      records[existing] = { ...records[existing], ...data };
+      setTable("evening_locations", records);
+      return records[existing];
+    }
+    const record = {
+      ...data,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+    };
+    records.push(record);
+    setTable("evening_locations", records);
+    return record;
+  },
+};

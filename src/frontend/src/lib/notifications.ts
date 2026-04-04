@@ -27,53 +27,84 @@ export function clearNotificationSchedules() {
   notifTimeouts = [];
 }
 
-export function scheduleLocalNotifications() {
+function showNotification(title: string, body: string, tag: string) {
+  if (!("Notification" in window) || Notification.permission !== "granted")
+    return;
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.showNotification(title, {
+        body,
+        icon: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
+        badge: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
+        tag,
+        requireInteraction: false,
+      } as NotificationOptions);
+    });
+  }
+}
+
+export function scheduleLocalNotifications(userRole?: string) {
   clearNotificationSchedules();
   if (!("Notification" in window) || Notification.permission !== "granted")
     return;
   if (!("serviceWorker" in navigator)) return;
 
+  // 8:55 AM - attendance window opens in 5 minutes
+  const ms855 = msUntilTime(8, 55);
+  const t855 = setTimeout(() => {
+    showNotification(
+      "Attendance Opening Soon",
+      "Attendance will open in 5 minutes (9:00 AM – 9:30 AM).",
+      "attendance-open-reminder",
+    );
+    scheduleLocalNotifications(userRole);
+  }, ms855);
+  notifTimeouts.push(t855);
+
   // 9:30 AM - attendance reminder
   const ms930 = msUntilTime(9, 30);
-  const t1 = setTimeout(() => {
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.showNotification("Attendance Reminder", {
-        body: "Please mark your attendance for today.",
-        icon: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
-        badge: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
-        tag: "attendance-reminder",
-        requireInteraction: false,
-      } as NotificationOptions);
-    });
-    // Reschedule for next day
-    scheduleLocalNotifications();
+  const t930 = setTimeout(() => {
+    showNotification(
+      "Attendance Reminder",
+      "Please mark your attendance for today.",
+      "attendance-reminder",
+    );
   }, ms930);
-  notifTimeouts.push(t1);
+  notifTimeouts.push(t930);
 
   // 2:00 PM - work update reminder
   const ms200 = msUntilTime(14, 0);
-  const t2 = setTimeout(() => {
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.showNotification("Work Update Reminder", {
-        body: "Please confirm your afternoon work status.",
-        icon: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
-        badge: "/assets/uploads/file_0000000067d07206837b64be921a668c-2-1.png",
-        tag: "work-reminder",
-        requireInteraction: false,
-      } as NotificationOptions);
-    });
+  const t200 = setTimeout(() => {
+    showNotification(
+      "Work Update Reminder",
+      "Please confirm your afternoon work status.",
+      "work-reminder",
+    );
   }, ms200);
-  notifTimeouts.push(t2);
+  notifTimeouts.push(t200);
+
+  // 3:55 PM - owner: time to check worker locations
+  if (!userRole || userRole === "owner") {
+    const ms355 = msUntilTime(15, 55);
+    const t355 = setTimeout(() => {
+      showNotification(
+        "Worker Location Check",
+        "It's time to check worker locations.",
+        "location-check-reminder",
+      );
+    }, ms355);
+    notifTimeouts.push(t355);
+  }
 }
 
-export async function initNotifications() {
+export async function initNotifications(userRole?: string) {
   if (!("Notification" in window)) return;
   const alreadyAsked = localStorage.getItem(NOTIF_PERMISSION_KEY);
   if (!alreadyAsked) {
     localStorage.setItem(NOTIF_PERMISSION_KEY, "asked");
     const granted = await requestNotificationPermission();
-    if (granted) scheduleLocalNotifications();
+    if (granted) scheduleLocalNotifications(userRole);
   } else if (Notification.permission === "granted") {
-    scheduleLocalNotifications();
+    scheduleLocalNotifications(userRole);
   }
 }

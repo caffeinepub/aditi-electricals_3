@@ -1483,3 +1483,117 @@ export function useDeleteCarryForwardEntry() {
     },
   });
 }
+
+// ---- Evening Locations ----
+
+export interface EveningLocation {
+  id: string;
+  workerId: string;
+  date: string;
+  latitude: number;
+  longitude: number;
+  capturedAt: string; // ISO timestamp
+  createdAt: string;
+}
+
+export function mapEveningLocation(
+  row: Record<string, unknown>,
+): EveningLocation {
+  return {
+    id: row.id as string,
+    workerId: row.worker_id as string,
+    date: row.date as string,
+    latitude: Number(row.latitude),
+    longitude: Number(row.longitude),
+    capturedAt:
+      (row.captured_at as string) ||
+      (row.created_at as string) ||
+      new Date().toISOString(),
+    createdAt: (row.created_at as string) || new Date().toISOString(),
+  };
+}
+
+export function useGetEveningLocationsByDate(date: string) {
+  return useQuery<EveningLocation[]>({
+    queryKey: ["eveningLocations", date],
+    queryFn: async () => {
+      if (!date) return [];
+      if (!isSupabaseConfigured()) {
+        const { localEveningLocations } = await import("../lib/localDb");
+        return localEveningLocations.getByDate(date).map(mapEveningLocation);
+      }
+      const { data, error } = await supabase
+        .from("evening_locations")
+        .select("*")
+        .eq("date", date)
+        .order("captured_at");
+      if (error) return [];
+      return (data || []).map(mapEveningLocation);
+    },
+    enabled: !!date,
+    refetchInterval: 30000,
+  });
+}
+
+export function useSaveEveningLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      workerId,
+      date,
+      latitude,
+      longitude,
+    }: {
+      workerId: string;
+      date: string;
+      latitude: number;
+      longitude: number;
+    }) => {
+      const capturedAt = new Date().toISOString();
+      if (!isSupabaseConfigured()) {
+        const { localEveningLocations } = await import("../lib/localDb");
+        const record = localEveningLocations.upsert({
+          worker_id: workerId,
+          date,
+          latitude,
+          longitude,
+          captured_at: capturedAt,
+        });
+        return record.id as string;
+      }
+      // Upsert: one record per worker per day
+      const { data: existing } = await supabase
+        .from("evening_locations")
+        .select("id")
+        .eq("worker_id", workerId)
+        .eq("date", date)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from("evening_locations")
+          .update({ latitude, longitude, captured_at: capturedAt })
+          .eq("worker_id", workerId)
+          .eq("date", date);
+        if (error) throw error;
+        return (existing as Record<string, unknown>).id as string;
+      }
+      const { data, error } = await supabase
+        .from("evening_locations")
+        .insert({
+          worker_id: workerId,
+          date,
+          latitude,
+          longitude,
+          captured_at: capturedAt,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return (data as Record<string, unknown>)!.id as string;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["eveningLocations", vars.date] });
+    },
+  });
+}
