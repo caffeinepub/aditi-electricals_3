@@ -1,16 +1,8 @@
 // localStorage-based fallback database (used when Supabase is not configured)
 
 export function isSupabaseConfigured(): boolean {
-  const url = import.meta.env.VITE_SUPABASE_URL as string;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-  return !!(
-    url &&
-    url !== "undefined" &&
-    !url.includes("placeholder") &&
-    key &&
-    key !== "undefined" &&
-    key !== "placeholder"
-  );
+  // Always true — Supabase credentials are hardcoded in supabase.ts
+  return true;
 }
 
 function uuidv4(): string {

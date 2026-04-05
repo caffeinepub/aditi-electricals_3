@@ -6,8 +6,8 @@ import React, {
   type ReactNode,
 } from "react";
 import type { Language } from "../lib/i18n";
-import { localWorkers } from "../lib/localDb";
-import { isLocalOnlyMode, supabase } from "../lib/supabase";
+
+import { supabase } from "../lib/supabase";
 
 export type { Language };
 export type UserRole = "owner" | "worker";
@@ -90,57 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const trimmedId = workerId.trim().toUpperCase();
       const trimmedPin = pin.trim();
-
-      // ── LOCAL-ONLY MODE ──────────────────────────────────────────────────────
-      // Only use localStorage when Supabase is genuinely not configured
-      // (no URL set, or URL is a placeholder). This prevents the cross-device
-      // login bug where workers added on one device were invisible on others.
-      if (isLocalOnlyMode) {
-        const worker = localWorkers.getByIdForLogin(trimmedId);
-        if (!worker) {
-          return {
-            success: false,
-            error: "Employee ID not found. Please check your ID and try again.",
-          };
-        }
-        if (!worker.active) {
-          return {
-            success: false,
-            error: "Your account is inactive. Contact the owner.",
-          };
-        }
-        if (worker.pin !== trimmedPin) {
-          return {
-            success: false,
-            error: "Incorrect PIN. Please try again.",
-          };
-        }
-        const role: UserRole =
-          worker.role === "owner" ||
-          trimmedId === "OWNER001" ||
-          trimmedId === "OWNER1"
-            ? "owner"
-            : "worker";
-        const photo = localStorage.getItem(
-          getProfilePhotoKey(worker.worker_id as string),
-        );
-        const authUser: AuthUser = {
-          workerId: worker.worker_id as string,
-          name: worker.name as string,
-          role,
-          profilePhoto: photo || null,
-        };
-        setUser(authUser);
-        localStorage.setItem(
-          AUTH_STORAGE_KEY,
-          JSON.stringify({
-            workerId: authUser.workerId,
-            name: authUser.name,
-            role: authUser.role,
-          }),
-        );
-        return { success: true };
-      }
 
       // ── SUPABASE LOGIN (all devices, real database) ───────────────────────────
       const { data, error } = await supabase

@@ -1,23 +1,14 @@
-// Minimal Supabase REST client — no external package required
+// Supabase REST client — credentials hardcoded for cross-device login
+// Uses plain async functions and factory objects (no Promise subclassing)
 
-export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+export const supabaseUrl = "https://qxfabmlkwtsukoegavpa.supabase.co";
+const supabaseAnonKey =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF4ZmFibWxrd3RzdWtvZWdhdnBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMDg3MjMsImV4cCI6MjA5MDg4NDcyM30.OIrHqPfZZY9pFNo7ygMZtzLkmR2FH_XoL23s_jJm1lc";
 
-if (!supabaseUrl || supabaseUrl === "undefined") {
-  console.error("VITE_SUPABASE_URL is not set.");
-}
-if (!supabaseAnonKey || supabaseAnonKey === "undefined") {
-  console.error("VITE_SUPABASE_ANON_KEY is not set.");
-}
+const BASE_URL = supabaseUrl;
+const ANON_KEY = supabaseAnonKey;
 
-const BASE_URL = supabaseUrl || "https://placeholder.supabase.co";
-const ANON_KEY = supabaseAnonKey || "placeholder";
-
-// True when the app is running in local-only mode (no real Supabase configured)
-export const isLocalOnlyMode =
-  !supabaseUrl ||
-  supabaseUrl === "undefined" ||
-  supabaseUrl.includes("placeholder");
+export const isLocalOnlyMode = false;
 
 export type DbError = { message: string; code?: string } | null;
 export type DbResult<T> = { data: T | null; error: DbError };
@@ -64,244 +55,228 @@ async function doFetch<T>(
 type OrderOpts = { ascending?: boolean };
 type EqPair = { col: string; value: unknown };
 
-// SelectQuery extends Promise so it is awaitable without defining `then` manually
-class SelectQuery<T> extends Promise<DbResult<T[]>> {
-  private _table: string;
-  private _cols: string;
-  private _eqs: EqPair[];
-  private _neqs: EqPair[];
-  private _orderCol: string | undefined;
-  private _orderAsc: boolean;
-  private _mode: "array" | "single" | "maybeSingle";
-  private _limitVal: number | undefined;
-  private _gtes: EqPair[];
-  private _ltes: EqPair[];
-  private _resolve!: (v: DbResult<T[]>) => void;
-
-  constructor(
-    table: string,
-    cols = "*",
-    eqs: EqPair[] = [],
-    neqs: EqPair[] = [],
-    orderCol?: string,
-    orderAsc = true,
-    mode: "array" | "single" | "maybeSingle" = "array",
-    limitVal?: number,
-    gtes: EqPair[] = [],
-    ltes: EqPair[] = [],
-  ) {
-    let res!: (v: DbResult<T[]>) => void;
-    super((resolve) => {
-      res = resolve;
-    });
-    this._table = table;
-    this._cols = cols;
-    this._eqs = eqs;
-    this._neqs = neqs;
-    this._orderCol = orderCol;
-    this._orderAsc = orderAsc;
-    this._mode = mode;
-    this._limitVal = limitVal;
-    this._gtes = gtes;
-    this._ltes = ltes;
-    this._resolve = res;
-    // Schedule execution
-    Promise.resolve().then(() => this._run().then(this._resolve));
-  }
-
-  private _clone(
-    overrides: Partial<{
-      cols: string;
-      eqs: EqPair[];
-      neqs: EqPair[];
-      orderCol: string;
-      orderAsc: boolean;
-      mode: "array" | "single" | "maybeSingle";
-      limitVal: number;
-      gtes: EqPair[];
-      ltes: EqPair[];
-    }>,
-  ): SelectQuery<T> {
-    return new SelectQuery<T>(
-      this._table,
-      overrides.cols ?? this._cols,
-      overrides.eqs ?? this._eqs,
-      overrides.neqs ?? this._neqs,
-      overrides.orderCol ?? this._orderCol,
-      overrides.orderAsc ?? this._orderAsc,
-      overrides.mode ?? this._mode,
-      overrides.limitVal ?? this._limitVal,
-      overrides.gtes ?? this._gtes,
-      overrides.ltes ?? this._ltes,
-    );
-  }
-
-  select(cols = "*"): SelectQuery<T> {
-    return this._clone({ cols });
-  }
-
-  eq(col: string, value: unknown): SelectQuery<T> {
-    return this._clone({ eqs: [...this._eqs, { col, value }] });
-  }
-
-  neq(col: string, value: unknown): SelectQuery<T> {
-    return this._clone({ neqs: [...this._neqs, { col, value }] });
-  }
-
-  order(col: string, opts?: OrderOpts): SelectQuery<T> {
-    return this._clone({
-      orderCol: col,
-      orderAsc: opts?.ascending !== false,
-    });
-  }
-
-  single(): Promise<DbResult<T>> {
-    return this._clone({ mode: "single" }) as unknown as Promise<DbResult<T>>;
-  }
-
-  maybeSingle(): Promise<DbResult<T | null>> {
-    return this._clone({ mode: "maybeSingle" }) as unknown as Promise<
-      DbResult<T | null>
-    >;
-  }
-
-  limit(n: number): SelectQuery<T> {
-    return this._clone({ limitVal: n });
-  }
-
-  gte(col: string, value: unknown): SelectQuery<T> {
-    return this._clone({ gtes: [...this._gtes, { col, value }] });
-  }
-
-  lte(col: string, value: unknown): SelectQuery<T> {
-    return this._clone({ ltes: [...this._ltes, { col, value }] });
-  }
-
-  private _run(): Promise<DbResult<T[]>> {
-    const params: string[] = [`select=${encodeURIComponent(this._cols)}`];
-    for (const { col, value } of this._eqs) params.push(`${col}=eq.${value}`);
-    for (const { col, value } of this._neqs) params.push(`${col}=neq.${value}`);
-    for (const { col, value } of this._gtes) params.push(`${col}=gte.${value}`);
-    for (const { col, value } of this._ltes) params.push(`${col}=lte.${value}`);
-    if (this._orderCol) {
-      params.push(`order=${this._orderCol}.${this._orderAsc ? "asc" : "desc"}`);
-    }
-    if (this._limitVal !== undefined) {
-      params.push(`limit=${this._limitVal}`);
-    }
-    const url = `${BASE_URL}/rest/v1/${this._table}?${params.join("&")}`;
-    const isSingle = this._mode !== "array";
-    const h = buildHeaders(
-      isSingle ? { Accept: "application/vnd.pgrst.object+json" } : undefined,
-    );
-    return doFetch<T[]>(url, { headers: h });
-  }
+interface SelectState {
+  table: string;
+  cols: string;
+  eqs: EqPair[];
+  neqs: EqPair[];
+  orderCol?: string;
+  orderAsc: boolean;
+  limitVal?: number;
+  gtes: EqPair[];
+  ltes: EqPair[];
 }
 
-// MutateQuery extends Promise so it is awaitable
-class MutateQuery<T = Record<string, unknown>> extends Promise<DbResult<T>> {
-  private _table: string;
-  private _method: string;
-  private _body: unknown;
-  private _onConflict: string | undefined;
-  private _eqs: EqPair[];
-  private _doSelect: boolean;
-  private _mode: "array" | "single" | "none";
-  private _resolve!: (v: DbResult<T>) => void;
-
-  constructor(
-    table: string,
-    method: string,
-    body: unknown,
-    onConflict?: string,
-    eqs: EqPair[] = [],
-    doSelect = false,
-    mode: "array" | "single" | "none" = "none",
-  ) {
-    let res!: (v: DbResult<T>) => void;
-    super((resolve) => {
-      res = resolve;
-    });
-    this._table = table;
-    this._method = method;
-    this._body = body;
-    this._onConflict = onConflict;
-    this._eqs = eqs;
-    this._doSelect = doSelect;
-    this._mode = mode;
-    this._resolve = res;
-    Promise.resolve().then(() => this._run().then(this._resolve));
+function buildSelectUrl(s: SelectState): string {
+  const params: string[] = [`select=${encodeURIComponent(s.cols)}`];
+  for (const { col, value } of s.eqs) params.push(`${col}=eq.${value}`);
+  for (const { col, value } of s.neqs) params.push(`${col}=neq.${value}`);
+  for (const { col, value } of s.gtes) params.push(`${col}=gte.${value}`);
+  for (const { col, value } of s.ltes) params.push(`${col}=lte.${value}`);
+  if (s.orderCol) {
+    params.push(`order=${s.orderCol}.${s.orderAsc ? "asc" : "desc"}`);
   }
+  if (s.limitVal !== undefined) params.push(`limit=${s.limitVal}`);
+  return `${BASE_URL}/rest/v1/${s.table}?${params.join("&")}`;
+}
 
-  private _clone(
-    overrides: Partial<{
-      eqs: EqPair[];
-      doSelect: boolean;
-      mode: "array" | "single" | "none";
-    }>,
-  ): MutateQuery<T> {
-    return new MutateQuery<T>(
-      this._table,
-      this._method,
-      this._body,
-      this._onConflict,
-      overrides.eqs ?? this._eqs,
-      overrides.doSelect ?? this._doSelect,
-      overrides.mode ?? this._mode,
-    );
-  }
+// Returns a builder object that is also a Promise<DbResult<T[]>>
+function makeSelectBuilder<T>(state: SelectState): Promise<DbResult<T[]>> & {
+  select(cols: string): ReturnType<typeof makeSelectBuilder<T>>;
+  eq(col: string, value: unknown): ReturnType<typeof makeSelectBuilder<T>>;
+  neq(col: string, value: unknown): ReturnType<typeof makeSelectBuilder<T>>;
+  order(col: string, opts?: OrderOpts): ReturnType<typeof makeSelectBuilder<T>>;
+  limit(n: number): ReturnType<typeof makeSelectBuilder<T>>;
+  gte(col: string, value: unknown): ReturnType<typeof makeSelectBuilder<T>>;
+  lte(col: string, value: unknown): ReturnType<typeof makeSelectBuilder<T>>;
+  single(): Promise<DbResult<T>>;
+  maybeSingle(): Promise<DbResult<T | null>>;
+} {
+  // The base promise executes the array fetch
+  const basePromise: Promise<DbResult<T[]>> = doFetch<T[]>(
+    buildSelectUrl(state),
+    { headers: buildHeaders() },
+  );
 
-  eq(col: string, value: unknown): MutateQuery<T> {
-    return this._clone({ eqs: [...this._eqs, { col, value }] });
-  }
+  const builder = Object.assign(basePromise, {
+    select(cols: string) {
+      return makeSelectBuilder<T>({ ...state, cols });
+    },
+    eq(col: string, value: unknown) {
+      return makeSelectBuilder<T>({
+        ...state,
+        eqs: [...state.eqs, { col, value }],
+      });
+    },
+    neq(col: string, value: unknown) {
+      return makeSelectBuilder<T>({
+        ...state,
+        neqs: [...state.neqs, { col, value }],
+      });
+    },
+    order(col: string, opts?: OrderOpts) {
+      return makeSelectBuilder<T>({
+        ...state,
+        orderCol: col,
+        orderAsc: opts?.ascending !== false,
+      });
+    },
+    limit(n: number) {
+      return makeSelectBuilder<T>({ ...state, limitVal: n });
+    },
+    gte(col: string, value: unknown) {
+      return makeSelectBuilder<T>({
+        ...state,
+        gtes: [...state.gtes, { col, value }],
+      });
+    },
+    lte(col: string, value: unknown) {
+      return makeSelectBuilder<T>({
+        ...state,
+        ltes: [...state.ltes, { col, value }],
+      });
+    },
+    async single(): Promise<DbResult<T>> {
+      const url = buildSelectUrl(state);
+      return doFetch<T>(url, {
+        headers: buildHeaders({ Accept: "application/vnd.pgrst.object+json" }),
+      });
+    },
+    async maybeSingle(): Promise<DbResult<T | null>> {
+      const url = buildSelectUrl(state);
+      const result = await doFetch<T>(url, {
+        headers: buildHeaders({ Accept: "application/vnd.pgrst.object+json" }),
+      });
+      if (result.error?.code === "PGRST116") {
+        return { data: null, error: null };
+      }
+      return result as DbResult<T | null>;
+    },
+  });
 
-  select(): MutateQuery<T> {
-    return this._clone({ doSelect: true, mode: "array" });
-  }
+  return builder;
+}
 
-  single(): Promise<DbResult<T>> {
-    return this._clone({ doSelect: true, mode: "single" });
-  }
+interface MutateState {
+  table: string;
+  method: string;
+  body: unknown;
+  onConflict?: string;
+  eqs: EqPair[];
+  doSelect: boolean;
+  returnMode: "array" | "single" | "none";
+}
 
-  private _run(): Promise<DbResult<T>> {
-    const filters = this._eqs.map(({ col, value }) => `${col}=eq.${value}`);
-    if (this._onConflict) filters.push(`on_conflict=${this._onConflict}`);
-    const url = `${BASE_URL}/rest/v1/${this._table}${filters.length ? `?${filters.join("&")}` : ""}`;
-    const prefer: string[] = [];
-    if (this._onConflict && this._method === "POST") {
-      prefer.push("resolution=merge-duplicates");
-    }
-    if (this._doSelect || this._mode !== "none") {
-      prefer.push("return=representation");
-    }
-    return doFetch<T>(url, {
-      method: this._method,
-      headers: buildHeaders({
-        "Content-Type": "application/json",
-        ...(prefer.length ? { Prefer: prefer.join(",") } : {}),
-      }),
-      body: this._body !== undefined ? JSON.stringify(this._body) : undefined,
-    });
-  }
+async function executeMutate<T>(s: MutateState): Promise<DbResult<T>> {
+  const filters = s.eqs.map(({ col, value }) => `${col}=eq.${value}`);
+  if (s.onConflict) filters.push(`on_conflict=${s.onConflict}`);
+  const url = `${BASE_URL}/rest/v1/${s.table}${
+    filters.length ? `?${filters.join("&")}` : ""
+  }`;
+  const prefer: string[] = [];
+  if (s.onConflict && s.method === "POST")
+    prefer.push("resolution=merge-duplicates");
+  if (s.doSelect || s.returnMode !== "none")
+    prefer.push("return=representation");
+  return doFetch<T>(url, {
+    method: s.method,
+    headers: buildHeaders({
+      "Content-Type": "application/json",
+      ...(prefer.length ? { Prefer: prefer.join(",") } : {}),
+    }),
+    body: s.body !== undefined ? JSON.stringify(s.body) : undefined,
+  });
+}
+
+function makeMutateBuilder<T = Record<string, unknown>>(
+  state: MutateState,
+): Promise<DbResult<T>> & {
+  eq(col: string, value: unknown): ReturnType<typeof makeMutateBuilder<T>>;
+  select(): ReturnType<typeof makeMutateBuilder<T>>;
+  single(): Promise<DbResult<T>>;
+} {
+  const basePromise: Promise<DbResult<T>> = executeMutate<T>(state);
+
+  const builder = Object.assign(basePromise, {
+    eq(col: string, value: unknown) {
+      return makeMutateBuilder<T>({
+        ...state,
+        eqs: [...state.eqs, { col, value }],
+      });
+    },
+    select() {
+      return makeMutateBuilder<T>({
+        ...state,
+        doSelect: true,
+        returnMode: "array",
+      });
+    },
+    async single(): Promise<DbResult<T>> {
+      return executeMutate<T>({
+        ...state,
+        doSelect: true,
+        returnMode: "single",
+      });
+    },
+  });
+
+  return builder;
 }
 
 export const supabase = {
   from<T = Record<string, unknown>>(table: string) {
     return {
-      select(cols = "*"): SelectQuery<T> {
-        return new SelectQuery<T>(table, cols);
+      select(cols = "*") {
+        return makeSelectBuilder<T>({
+          table,
+          cols,
+          eqs: [],
+          neqs: [],
+          orderAsc: true,
+          gtes: [],
+          ltes: [],
+        });
       },
-      insert(data: unknown): MutateQuery<T> {
-        return new MutateQuery<T>(table, "POST", data);
+      insert(data: unknown) {
+        return makeMutateBuilder<T>({
+          table,
+          method: "POST",
+          body: data,
+          eqs: [],
+          doSelect: false,
+          returnMode: "none",
+        });
       },
-      upsert(data: unknown, opts?: { onConflict?: string }): MutateQuery<T> {
-        return new MutateQuery<T>(table, "POST", data, opts?.onConflict);
+      upsert(data: unknown, opts?: { onConflict?: string }) {
+        return makeMutateBuilder<T>({
+          table,
+          method: "POST",
+          body: data,
+          onConflict: opts?.onConflict,
+          eqs: [],
+          doSelect: false,
+          returnMode: "none",
+        });
       },
-      update(data: unknown): MutateQuery<T> {
-        return new MutateQuery<T>(table, "PATCH", data);
+      update(data: unknown) {
+        return makeMutateBuilder<T>({
+          table,
+          method: "PATCH",
+          body: data,
+          eqs: [],
+          doSelect: false,
+          returnMode: "none",
+        });
       },
-      delete(): MutateQuery<T> {
-        return new MutateQuery<T>(table, "DELETE", undefined);
+      delete() {
+        return makeMutateBuilder<T>({
+          table,
+          method: "DELETE",
+          body: undefined,
+          eqs: [],
+          doSelect: false,
+          returnMode: "none",
+        });
       },
     };
   },
