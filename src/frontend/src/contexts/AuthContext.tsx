@@ -39,7 +39,6 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_STORAGE_KEY = "aditi_auth_user_v4";
 const LANG_STORAGE_KEY = "app_language";
-// Separate storage for profile photos (keyed by workerId)
 const PROFILE_PHOTO_KEY_PREFIX = "aditi_profile_photo_";
 
 export function getProfilePhotoKey(workerId: string): string {
@@ -60,7 +59,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(stored);
         if (parsed && (parsed.role === "owner" || parsed.role === "worker")) {
-          // Restore profile photo from persistent storage
           const photo = localStorage.getItem(
             getProfilePhotoKey(parsed.workerId),
           );
@@ -91,36 +89,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const trimmedId = workerId.trim().toUpperCase();
       const trimmedPin = pin.trim();
 
-      // ── SUPABASE LOGIN (all devices, real database) ───────────────────────────
+      // Query workers table using select('*') to avoid missing column errors
       const { data, error } = await supabase
         .from("workers")
-        .select("worker_id, name, pin, role, active")
+        .select("*")
         .eq("worker_id", trimmedId)
-        .single();
+        .maybeSingle();
 
       if (error) {
+        // Table doesn't exist in this Supabase project
         if (
+          error.code === "42P01" ||
           error.message?.includes("relation") ||
-          error.message?.includes("does not exist") ||
-          error.code === "42P01"
+          error.message?.includes("does not exist")
         ) {
           return {
             success: false,
             error:
-              "Database tables not found. Please run the SQL setup script in your Supabase project (see SUPABASE_SETUP.md).",
+              "Workers table not found in Supabase. Please run the SQL setup script.",
           };
         }
-        if (error.code === "PGRST116" || !data) {
+        // PGRST116 = no rows returned (treat as not found)
+        if (error.code === "PGRST116") {
           return {
             success: false,
             error: "Employee ID not found. Please check your ID and try again.",
           };
         }
+        // Any other error — show actual error for debugging
         return {
           success: false,
-          error: `Database error: ${
-            (error as { message?: string }).message ?? "Unknown error"
-          }`,
+          error: `Database error (${error.code || "unknown"}): ${error.message}`,
         };
       }
 
@@ -131,30 +130,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
 
-      if (!data.active) {
+      const workerData = data as Record<string, unknown>;
+
+      // active field may not exist — default to true (don't block login)
+      const isActive =
+        workerData.active === undefined || workerData.active === null
+          ? true
+          : workerData.active !== false;
+      if (!isActive) {
         return {
           success: false,
           error: "Your account is inactive. Contact the owner.",
         };
       }
 
-      if (data.pin !== trimmedPin) {
+      const storedPin = (workerData.pin as string) || "";
+      if (storedPin !== trimmedPin) {
         return { success: false, error: "Incorrect PIN. Please try again." };
       }
 
+      const rawRole = (workerData.role as string) || "";
       const role: UserRole =
-        data.role === "owner" ||
-        data.worker_id === "OWNER1" ||
-        data.worker_id === "OWNER001"
+        rawRole === "owner" ||
+        trimmedId === "OWNER1" ||
+        trimmedId === "OWNER001"
           ? "owner"
           : "worker";
 
-      const photo = localStorage.getItem(
-        getProfilePhotoKey(data.worker_id as string),
-      );
+      const photo = localStorage.getItem(getProfilePhotoKey(trimmedId));
       const authUser: AuthUser = {
-        workerId: data.worker_id as string,
-        name: data.name as string,
+        workerId: trimmedId,
+        name: (workerData.name as string) || trimmedId,
         role,
         profilePhoto: photo || null,
       };
@@ -201,7 +207,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const updated = { ...user, profilePhoto: photoBase64 };
     setUser(updated);
-    // Store photo separately (it's large, keep session data lean)
     if (photoBase64) {
       localStorage.setItem(getProfilePhotoKey(user.workerId), photoBase64);
     } else {

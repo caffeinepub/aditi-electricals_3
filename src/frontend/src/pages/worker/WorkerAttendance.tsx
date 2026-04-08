@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { AttendanceStatus, ExternalBlob } from "../../backend";
 import { useCamera } from "../../camera/useCamera";
 import AttendanceCalendar from "../../components/AttendanceCalendar";
 import { useAuth } from "../../contexts/AuthContext";
@@ -12,6 +11,7 @@ import {
   useMarkAttendance,
   useSaveEveningLocation,
 } from "../../hooks/useQueries";
+import { AttendanceStatus, ExternalBlob } from "../../types/appTypes";
 import {
   formatDate,
   getCurrentMonthYear,

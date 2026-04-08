@@ -20,13 +20,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, CheckCircle, Edit2, Plus, Trash2 } from "lucide-react";
 import React, { useState } from "react";
-import type { Announcement } from "../../backend";
 import {
   useAddAnnouncement,
   useDeleteAnnouncement,
   useGetAllAnnouncements,
   useUpdateAnnouncement,
 } from "../../hooks/useQueries";
+import type { Announcement } from "../../types/appTypes";
 import { formatTimestamp } from "../../utils/dateUtils";
 
 interface AnnouncementModalProps {

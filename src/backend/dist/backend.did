@@ -1,0 +1,211 @@
+type WorkerId = text;
+type Worker = 
+ record {
+   active: bool;
+   mobile: text;
+   monthlySalary: nat;
+   name: text;
+   pin: text;
+   workerId: WorkerId;
+ };
+type UserProfile = 
+ record {
+   name: text;
+   role: text;
+   workerId: opt text;
+ };
+type TwoPMConfirmation = 
+ record {
+   confirmationId: ConfirmationId;
+   confirmed: bool;
+   confirmedAt: opt Time;
+   date: text;
+   workerId: WorkerId;
+ };
+type Time = int;
+type SalaryRecord = 
+ record {
+   absentDays: nat;
+   advanceAmount: nat;
+   carryForward: int;
+   companyHolidays: nat;
+   cutDays: nat;
+   manualOverride: bool;
+   month: nat;
+   monthlySalary: nat;
+   netPay: int;
+   presentDays: nat;
+   salaryId: SalaryId;
+   workerId: WorkerId;
+   year: nat;
+ };
+type SalaryId = text;
+type NoteType = 
+ variant {
+   material;
+   ownerInstruction;
+   perWorker;
+   work;
+ };
+type NoteId = text;
+type Note = 
+ record {
+   content: text;
+   createdAt: Time;
+   createdBy: text;
+   noteId: NoteId;
+   noteType: NoteType;
+   photoUrl: opt ExternalBlob;
+   updatedAt: opt Time;
+   workerId: WorkerId;
+ };
+type MonthlySummaryEntry = 
+ record {
+   absentDays: nat;
+   leaveDays: nat;
+   presentDays: nat;
+   workerId: WorkerId;
+   workerName: text;
+ };
+type HolidayId = text;
+type Holiday = 
+ record {
+   createdAt: Time;
+   date: text;
+   description: opt text;
+   holidayId: HolidayId;
+   name: text;
+ };
+type ExternalBlob = blob;
+type DashboardStats = 
+ record {
+   todayAbsent: nat;
+   todayPresent: nat;
+   totalWorkers: nat;
+   twoPMConfirmations: nat;
+ };
+type ConfirmationId = text;
+type AttendanceStatus = 
+ variant {
+   absent;
+   holiday;
+   leave;
+   present;
+ };
+type AttendanceRecordPublic = 
+ record {
+   date: text;
+   markedBy: text;
+   photo: opt ExternalBlob;
+   recordId: AttendanceId;
+   status: AttendanceStatus;
+   timestamp: Time;
+   workerId: WorkerId;
+ };
+type AttendanceRecord = 
+ record {
+   date: text;
+   latitude: opt float64;
+   longitude: opt float64;
+   markedBy: text;
+   photo: opt ExternalBlob;
+   recordId: AttendanceId;
+   status: AttendanceStatus;
+   timestamp: Time;
+   workerId: WorkerId;
+ };
+type AttendanceId = text;
+type AnnouncementId = text;
+type Announcement = 
+ record {
+   announcementId: AnnouncementId;
+   content: text;
+   createdAt: Time;
+   title: text;
+ };
+service : {
+  addAnnouncement: (title: text, content: text) -> (AnnouncementId);
+  addHoliday: (date: text, name: text, description: opt text) -> (HolidayId);
+  addNote: (workerId: WorkerId, noteType: NoteType, content: text, photoUrl:
+   opt ExternalBlob) -> (NoteId);
+  addSalaryRecord: (workerId: WorkerId, month: nat, year: nat, monthlySalary:
+   nat, presentDays: nat, absentDays: nat, cutDays: nat, advanceAmount: 
+   nat, carryForward: int, companyHolidays: nat) -> (SalaryId);
+  addWorker: (name: text, mobile: text, monthlySalary: nat) -> (WorkerId);
+  changeMyPin: (currentPin: text, newPin: text) -> ();
+  changeWorkerPin: (workerId: WorkerId, newPin: text) -> ();
+  confirmTwoPM: (workerId: WorkerId) -> (ConfirmationId);
+  deleteAnnouncement: (announcementId: AnnouncementId) -> ();
+  deleteHoliday: (holidayId: HolidayId) -> ();
+  deleteNote: (noteId: NoteId) -> ();
+  deleteSalaryRecord: (salaryId: SalaryId) -> ();
+  deleteWorker: (workerId: WorkerId) -> ();
+  editHoliday: (holidayId: HolidayId, date: text, name: text, description:
+   opt text) -> ();
+  editWorker: (workerId: WorkerId, name: text, mobile: text, monthlySalary:
+   nat, pin: text, active: bool) -> ();
+  getAllAnnouncements: () -> (vec Announcement) query;
+  getAllHolidays: () -> (vec Holiday) query;
+  getAllNotes: () -> (vec Note) query;
+  getAllSalaryRecords: () -> (vec SalaryRecord) query;
+  getAllWorkers: () -> (vec Worker) query;
+  getAttendanceByDate: (workerId: WorkerId, date: text) ->
+   (opt AttendanceRecordPublic) query;
+  getAttendanceByWorker: (workerId: WorkerId) ->
+   (vec AttendanceRecordPublic) query;
+  getAttendanceByWorkerForMonth: (workerId: WorkerId, month: nat, year:
+   nat) -> (vec AttendanceRecordPublic) query;
+  getCallerUserProfile: () -> (opt UserProfile) query;
+  getConfirmationsByDate: (date: text) -> (vec TwoPMConfirmation) query;
+  getDashboardStats: () -> (DashboardStats) query;
+  getMonthlySummary: (month: nat, year: nat) ->
+   (vec MonthlySummaryEntry) query;
+  getMyConfirmation: (workerId: WorkerId, date: text) ->
+   (opt TwoPMConfirmation) query;
+  getMyNotes: () -> (vec Note) query;
+  getNotesByType: (noteType: NoteType) -> (vec Note) query;
+  getNotesByWorker: (workerId: WorkerId) -> (vec Note) query;
+  getOwnerStatus: () -> (record {
+                           isOwner: bool;
+                           ownerRegistered: bool;
+                         }) query;
+  getSalaryRecord: (workerId: WorkerId, month: nat, year: nat) ->
+   (opt SalaryRecord) query;
+  getUserProfile: (user: principal) -> (opt UserProfile) query;
+  getWorker: (workerId: WorkerId) -> (Worker) query;
+  linkWorkerPrincipal: (workerId: WorkerId) -> ();
+  markAttendance: (workerId: WorkerId, status: AttendanceStatus, latitude:
+   opt float64, longitude: opt float64, photo: opt ExternalBlob) ->
+   (AttendanceId);
+  ownerAddAttendance: (workerId: WorkerId, date: text, status:
+   AttendanceStatus) -> (AttendanceId);
+  ownerDeleteAttendance: (recordId: AttendanceId) -> ();
+  ownerGetAttendanceByDate: (workerId: WorkerId, date: text) ->
+   (opt AttendanceRecord) query;
+  ownerGetAttendanceByWorkerForMonth: (workerId: WorkerId, month: nat, year:
+   nat) -> (vec AttendanceRecord) query;
+  ownerGetAttendanceForDate: (date: text) -> (vec AttendanceRecord) query;
+  ownerUpdateAttendance: (recordId: AttendanceId, status:
+   AttendanceStatus) -> ();
+  registerOwner: () -> ();
+  saveCallerUserProfile: (profile: UserProfile) -> ();
+  transferOwnership: (newOwner: principal) -> ();
+  updateAnnouncement: (announcementId: AnnouncementId, title: text, content:
+   text) -> ();
+  updateHoliday: (holidayId: HolidayId, date: text, name: text, description:
+   opt text) -> ();
+  updateNote: (noteId: NoteId, content: text, photoUrl: opt ExternalBlob) ->
+   ();
+  updateSalaryRecord: (salaryId: SalaryId, monthlySalary: nat, presentDays:
+   nat, absentDays: nat, cutDays: nat, advanceAmount: nat, carryForward: 
+   int, companyHolidays: nat, manualOverride: bool, overrideNetPay:
+   opt int) -> ();
+  updateWorker: (workerId: WorkerId, name: text, mobile: text, monthlySalary:
+   nat, pin: text, active: bool) -> ();
+  validateWorkerLogin: (workerId: WorkerId, pin: text) ->
+   (opt record {
+          name: text;
+          role: text;
+          workerId: WorkerId;
+        }) query;
+}

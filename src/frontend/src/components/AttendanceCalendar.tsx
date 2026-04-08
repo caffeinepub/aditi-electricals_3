@@ -4,7 +4,7 @@ import {
   type AttendanceRecordPublic,
   AttendanceStatus,
   type Holiday,
-} from "../backend";
+} from "../types/appTypes";
 import {
   getDaysInMonth,
   getFirstDayOfMonth,

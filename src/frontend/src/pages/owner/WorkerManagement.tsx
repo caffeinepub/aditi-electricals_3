@@ -8,11 +8,11 @@ import {
   Trash2,
 } from "lucide-react";
 import React, { useState } from "react";
-import type { Worker } from "../../backend";
 import PINChangeModal from "../../components/PINChangeModal";
 import AddWorkerModal from "../../components/owner/AddWorkerModal";
 import EditWorkerModal from "../../components/owner/EditWorkerModal";
 import { useDeleteWorker, useGetAllWorkers } from "../../hooks/useQueries";
+import type { Worker } from "../../types/appTypes";
 
 interface WorkerManagementProps {
   onNavigate: (page: string, params?: Record<string, string>) => void;

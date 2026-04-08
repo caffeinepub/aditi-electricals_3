@@ -1,8 +1,8 @@
 import { AlertCircle, Camera, Image, Loader2, X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { ExternalBlob, NoteType, type Worker } from "../../backend";
 import { useAddNote } from "../../hooks/useQueries";
+import { ExternalBlob, NoteType, type Worker } from "../../types/appTypes";
 
 interface AddNoteModalProps {
   workers: Worker[];

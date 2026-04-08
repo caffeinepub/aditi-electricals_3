@@ -7,7 +7,6 @@ import {
   Search,
 } from "lucide-react";
 import React, { useState, useMemo } from "react";
-import { type Note, NoteType } from "../../backend";
 import AddNoteModal from "../../components/notes/AddNoteModal";
 import EditNoteModal from "../../components/notes/EditNoteModal";
 import NoteCard from "../../components/notes/NoteCard";
@@ -17,6 +16,7 @@ import {
   useGetAllNotes,
   useGetAllWorkers,
 } from "../../hooks/useQueries";
+import { type Note, NoteType } from "../../types/appTypes";
 
 type TabType = "work" | "material" | "ownerInstruction" | "perWorker";
 

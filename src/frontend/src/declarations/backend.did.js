@@ -8,17 +8,6 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const _CaffeineStorageCreateCertificateResult = IDL.Record({
-  'method' : IDL.Text,
-  'blob_hash' : IDL.Text,
-});
-export const _CaffeineStorageRefillInformation = IDL.Record({
-  'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
-});
-export const _CaffeineStorageRefillResult = IDL.Record({
-  'success' : IDL.Opt(IDL.Bool),
-  'topped_up_amount' : IDL.Opt(IDL.Nat),
-});
 export const AnnouncementId = IDL.Text;
 export const HolidayId = IDL.Text;
 export const WorkerId = IDL.Text;
@@ -31,11 +20,6 @@ export const NoteType = IDL.Variant({
 export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const NoteId = IDL.Text;
 export const SalaryId = IDL.Text;
-export const UserRole = IDL.Variant({
-  'admin' : IDL.Null,
-  'user' : IDL.Null,
-  'guest' : IDL.Null,
-});
 export const ConfirmationId = IDL.Text;
 export const Time = IDL.Int;
 export const Announcement = IDL.Record({
@@ -138,33 +122,6 @@ export const AttendanceRecord = IDL.Record({
 });
 
 export const idlService = IDL.Service({
-  '_caffeineStorageBlobIsLive' : IDL.Func(
-      [IDL.Vec(IDL.Nat8)],
-      [IDL.Bool],
-      ['query'],
-    ),
-  '_caffeineStorageBlobsToDelete' : IDL.Func(
-      [],
-      [IDL.Vec(IDL.Vec(IDL.Nat8))],
-      ['query'],
-    ),
-  '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
-      [IDL.Vec(IDL.Vec(IDL.Nat8))],
-      [],
-      [],
-    ),
-  '_caffeineStorageCreateCertificate' : IDL.Func(
-      [IDL.Text],
-      [_CaffeineStorageCreateCertificateResult],
-      [],
-    ),
-  '_caffeineStorageRefillCashier' : IDL.Func(
-      [IDL.Opt(_CaffeineStorageRefillInformation)],
-      [_CaffeineStorageRefillResult],
-      [],
-    ),
-  '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
-  '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
   'addAnnouncement' : IDL.Func([IDL.Text, IDL.Text], [AnnouncementId], []),
   'addHoliday' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
@@ -193,7 +150,6 @@ export const idlService = IDL.Service({
       [],
     ),
   'addWorker' : IDL.Func([IDL.Text, IDL.Text, IDL.Nat], [WorkerId], []),
-  'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'changeMyPin' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'changeWorkerPin' : IDL.Func([WorkerId, IDL.Text], [], []),
   'confirmTwoPM' : IDL.Func([WorkerId], [ConfirmationId], []),
@@ -233,7 +189,6 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-  'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getConfirmationsByDate' : IDL.Func(
       [IDL.Text],
       [IDL.Vec(TwoPMConfirmation)],
@@ -269,7 +224,6 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getWorker' : IDL.Func([WorkerId], [Worker], ['query']),
-  'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'linkWorkerPrincipal' : IDL.Func([WorkerId], [], []),
   'markAttendance' : IDL.Func(
       [
@@ -353,17 +307,6 @@ export const idlService = IDL.Service({
 export const idlInitArgs = [];
 
 export const idlFactory = ({ IDL }) => {
-  const _CaffeineStorageCreateCertificateResult = IDL.Record({
-    'method' : IDL.Text,
-    'blob_hash' : IDL.Text,
-  });
-  const _CaffeineStorageRefillInformation = IDL.Record({
-    'proposed_top_up_amount' : IDL.Opt(IDL.Nat),
-  });
-  const _CaffeineStorageRefillResult = IDL.Record({
-    'success' : IDL.Opt(IDL.Bool),
-    'topped_up_amount' : IDL.Opt(IDL.Nat),
-  });
   const AnnouncementId = IDL.Text;
   const HolidayId = IDL.Text;
   const WorkerId = IDL.Text;
@@ -376,11 +319,6 @@ export const idlFactory = ({ IDL }) => {
   const ExternalBlob = IDL.Vec(IDL.Nat8);
   const NoteId = IDL.Text;
   const SalaryId = IDL.Text;
-  const UserRole = IDL.Variant({
-    'admin' : IDL.Null,
-    'user' : IDL.Null,
-    'guest' : IDL.Null,
-  });
   const ConfirmationId = IDL.Text;
   const Time = IDL.Int;
   const Announcement = IDL.Record({
@@ -483,33 +421,6 @@ export const idlFactory = ({ IDL }) => {
   });
   
   return IDL.Service({
-    '_caffeineStorageBlobIsLive' : IDL.Func(
-        [IDL.Vec(IDL.Nat8)],
-        [IDL.Bool],
-        ['query'],
-      ),
-    '_caffeineStorageBlobsToDelete' : IDL.Func(
-        [],
-        [IDL.Vec(IDL.Vec(IDL.Nat8))],
-        ['query'],
-      ),
-    '_caffeineStorageConfirmBlobDeletion' : IDL.Func(
-        [IDL.Vec(IDL.Vec(IDL.Nat8))],
-        [],
-        [],
-      ),
-    '_caffeineStorageCreateCertificate' : IDL.Func(
-        [IDL.Text],
-        [_CaffeineStorageCreateCertificateResult],
-        [],
-      ),
-    '_caffeineStorageRefillCashier' : IDL.Func(
-        [IDL.Opt(_CaffeineStorageRefillInformation)],
-        [_CaffeineStorageRefillResult],
-        [],
-      ),
-    '_caffeineStorageUpdateGatewayPrincipals' : IDL.Func([], [], []),
-    '_initializeAccessControlWithSecret' : IDL.Func([IDL.Text], [], []),
     'addAnnouncement' : IDL.Func([IDL.Text, IDL.Text], [AnnouncementId], []),
     'addHoliday' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Opt(IDL.Text)],
@@ -538,7 +449,6 @@ export const idlFactory = ({ IDL }) => {
         [],
       ),
     'addWorker' : IDL.Func([IDL.Text, IDL.Text, IDL.Nat], [WorkerId], []),
-    'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'changeMyPin' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'changeWorkerPin' : IDL.Func([WorkerId, IDL.Text], [], []),
     'confirmTwoPM' : IDL.Func([WorkerId], [ConfirmationId], []),
@@ -578,7 +488,6 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
-    'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getConfirmationsByDate' : IDL.Func(
         [IDL.Text],
         [IDL.Vec(TwoPMConfirmation)],
@@ -614,7 +523,6 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getWorker' : IDL.Func([WorkerId], [Worker], ['query']),
-    'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'linkWorkerPrincipal' : IDL.Func([WorkerId], [], []),
     'markAttendance' : IDL.Func(
         [

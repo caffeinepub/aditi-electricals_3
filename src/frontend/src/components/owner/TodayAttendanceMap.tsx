@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import type { AttendanceRecord, Worker } from "../../backend";
+import type { AttendanceRecord, Worker } from "../../types/appTypes";
 import { formatTimestamp } from "../../utils/dateUtils";
 
 interface AttendanceWithWorker {

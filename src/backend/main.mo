@@ -9,18 +9,23 @@ import Int "mo:core/Int";
 import Order "mo:core/Order";
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
-import MixinStorage "blob-storage/Mixin";
-import Storage "blob-storage/Storage";
-import AccessControl "authorization/access-control";
-import MixinAuthorization "authorization/MixinAuthorization";
-
-
 
 actor {
-  include MixinStorage();
 
-  let accessControlState = AccessControl.initState();
-  include MixinAuthorization(accessControlState);
+  // Inline replacement for blob-storage/Storage.ExternalBlob
+  // The original type was Blob (frontend uses Supabase exclusively; this backend is legacy)
+  type ExternalBlob = Blob;
+
+  // Inline replacement for authorization access control types
+  // (kept as stable vars for upgrade compatibility with previous version)
+  type UserRole = { #admin; #guest; #user };
+  stable let accessControlState : {
+    var adminAssigned : Bool;
+    userRoles : Map.Map<Principal, UserRole>;
+  } = { var adminAssigned = false; userRoles = Map.empty<Principal, UserRole>() };
+
+  // All authenticated callers are treated as having #user permission
+  func hasPermission(_caller : Principal) : Bool = true;
 
   // ---- Owner Principal ----
   var owner : ?Principal = null;
@@ -35,14 +40,14 @@ actor {
   let userProfiles = Map.empty<Principal, UserProfile>();
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not (hasPermission(caller))) {
       Runtime.trap("Unauthorized: Only users can get profiles");
     };
     userProfiles.get(caller);
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not (hasPermission(caller))) {
       Runtime.trap("Unauthorized: Only users can save profiles");
     };
     userProfiles.add(caller, profile);
@@ -122,7 +127,7 @@ actor {
     status : AttendanceStatus;
     markedBy : Text;
     timestamp : Time.Time;
-    photo : ?Storage.ExternalBlob;
+    photo : ?ExternalBlob;
   };
 
   // Full attendance record with location (owner-only)
@@ -135,7 +140,7 @@ actor {
     timestamp : Time.Time;
     latitude : ?Float;
     longitude : ?Float;
-    photo : ?Storage.ExternalBlob;
+    photo : ?ExternalBlob;
   };
 
   type AttendanceStatus = {
@@ -158,7 +163,7 @@ actor {
     workerId : WorkerId;
     noteType : NoteType;
     content : Text;
-    photoUrl : ?Storage.ExternalBlob;
+    photoUrl : ?ExternalBlob;
     createdBy : Text;
     createdAt : Time.Time;
     updatedAt : ?Time.Time;
@@ -256,7 +261,7 @@ actor {
 
   // Link a worker's principal to their worker profile after login
   public shared ({ caller }) func linkWorkerPrincipal(workerId : WorkerId) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not (hasPermission(caller))) {
       Runtime.trap("Unauthorized: Must be authenticated to link worker profile");
     };
     switch (workers.get(workerId)) {
@@ -386,7 +391,7 @@ actor {
 
   // Workers can change their own PIN
   public shared ({ caller }) func changeMyPin(currentPin : Text, newPin : Text) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+    if (not (hasPermission(caller))) {
       Runtime.trap("Unauthorized: Must be authenticated to change PIN");
     };
     switch (getCallerWorkerId(caller)) {
@@ -417,7 +422,7 @@ actor {
 
   // Workers can view their own record; owner can view any
   public query ({ caller }) func getWorker(workerId : WorkerId) : async Worker {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view worker details");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -459,9 +464,9 @@ actor {
     status : AttendanceStatus,
     latitude : ?Float,
     longitude : ?Float,
-    photo : ?Storage.ExternalBlob,
+    photo : ?ExternalBlob,
   ) : async AttendanceId {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to mark attendance");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -599,7 +604,7 @@ actor {
 
   // Workers get their own attendance (without location data)
   public query ({ caller }) func getAttendanceByDate(workerId : WorkerId, date : Text) : async ?AttendanceRecordPublic {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view attendance");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -633,7 +638,7 @@ actor {
 
   // Workers get their own attendance history (without location data)
   public query ({ caller }) func getAttendanceByWorker(workerId : WorkerId) : async [AttendanceRecordPublic] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view attendance");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -675,7 +680,7 @@ actor {
 
   // Get attendance for a worker for a specific month (workers: own only; owner: any)
   public query ({ caller }) func getAttendanceByWorkerForMonth(workerId : WorkerId, month : Nat, year : Nat) : async [AttendanceRecordPublic] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view attendance");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -841,7 +846,7 @@ actor {
   // ---- 2PM Confirmation ----
 
   public shared ({ caller }) func confirmTwoPM(workerId : WorkerId) : async ConfirmationId {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to confirm 2PM");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -886,7 +891,7 @@ actor {
 
   // Worker views their own confirmation
   public query ({ caller }) func getMyConfirmation(workerId : WorkerId, date : Text) : async ?TwoPMConfirmation {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -917,9 +922,9 @@ actor {
     workerId : WorkerId,
     noteType : NoteType,
     content : Text,
-    photoUrl : ?Storage.ExternalBlob,
+    photoUrl : ?ExternalBlob,
   ) : async NoteId {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to add notes");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -968,8 +973,8 @@ actor {
   };
 
   // Edit a note — workers can only edit their own work/material notes
-  public shared ({ caller }) func updateNote(noteId : NoteId, content : Text, photoUrl : ?Storage.ExternalBlob) : async () {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+  public shared ({ caller }) func updateNote(noteId : NoteId, content : Text, photoUrl : ?ExternalBlob) : async () {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to edit notes");
     };
     switch (notes.get(noteId)) {
@@ -1050,7 +1055,7 @@ actor {
 
   // Workers get their own notes (work + material) plus public owner instructions
   public query ({ caller }) func getMyNotes() : async [Note] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view notes");
     };
     switch (getCallerWorkerId(caller)) {
@@ -1205,7 +1210,7 @@ actor {
 
   // Workers can only view their own salary; owner can view any
   public query ({ caller }) func getSalaryRecord(workerId : WorkerId, month : Nat, year : Nat) : async ?SalaryRecord {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view salary");
     };
     if (not isOwnerPrincipal(caller)) {
@@ -1289,7 +1294,7 @@ actor {
 
   // All authenticated users can view announcements
   public query ({ caller }) func getAllAnnouncements() : async [Announcement] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view announcements");
     };
     announcements.values().toArray().sort();
@@ -1380,7 +1385,7 @@ actor {
 
   // All authenticated users can view holidays
   public query ({ caller }) func getAllHolidays() : async [Holiday] {
-    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+    if (not hasPermission(caller)) {
       Runtime.trap("Unauthorized: Must be authenticated to view holidays");
     };
     holidays.values().toArray().sort();

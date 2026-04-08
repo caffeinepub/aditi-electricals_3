@@ -1,15 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AttendanceStatus, NoteType } from "../backend";
-import {
-  isSupabaseConfigured,
-  localAnnouncements,
-  localAttendance,
-  localConfirmations,
-  localHolidays,
-  localNotes,
-  localSalary,
-  localWorkers,
-} from "../lib/localDb";
 import {
   mapAnnouncement,
   mapAttendance,
@@ -20,6 +9,7 @@ import {
   mapWorker,
   supabase,
 } from "../lib/supabase";
+import type { AttendanceStatus, NoteType } from "../types/appTypes";
 import { getTodayString } from "../utils/dateUtils";
 
 function getStoredWorkerId(): string {
@@ -38,15 +28,15 @@ export function useGetAllWorkers() {
   return useQuery({
     queryKey: ["workers"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return localWorkers.getAll().map(mapWorker);
-      }
       const { data, error } = await supabase
         .from("workers")
         .select("*")
         .neq("role", "owner")
         .order("worker_id");
-      if (error) throw error;
+      if (error) {
+        console.error("useGetAllWorkers error:", error.code, error.message);
+        return [];
+      }
       return (data || []).map(mapWorker);
     },
     staleTime: 30000,
@@ -58,17 +48,16 @@ export function useGetWorker(workerId: string) {
     queryKey: ["worker", workerId],
     queryFn: async () => {
       if (!workerId) return null;
-      if (!isSupabaseConfigured()) {
-        const w = localWorkers.getById(workerId);
-        return w ? mapWorker(w) : null;
-      }
       const { data, error } = await supabase
         .from("workers")
         .select("*")
         .eq("worker_id", workerId)
-        .single();
-      if (error) return null;
-      return mapWorker(data!);
+        .maybeSingle();
+      if (error) {
+        console.error("useGetWorker error:", error.code, error.message);
+        return null;
+      }
+      return data ? mapWorker(data) : null;
     },
     enabled: !!workerId,
   });
@@ -82,19 +71,6 @@ export function useAddWorker() {
       mobile,
       monthlySalary,
     }: { name: string; mobile: string; monthlySalary: number }) => {
-      if (!isSupabaseConfigured()) {
-        const workerId = localWorkers.nextWorkerId();
-        localWorkers.insert({
-          worker_id: workerId,
-          name,
-          mobile,
-          monthly_salary: monthlySalary,
-          pin: "0000",
-          role: "worker",
-          active: true,
-        });
-        return workerId;
-      }
       const { data: existing } = await supabase
         .from("workers")
         .select("worker_id")
@@ -104,7 +80,8 @@ export function useAddWorker() {
 
       let nextNum = 1;
       if (existing && existing.length > 0) {
-        const last = existing[0].worker_id as string;
+        const last = (existing[0] as Record<string, unknown>)
+          .worker_id as string;
         const num = Number.parseInt(last.replace("W", ""), 10);
         if (!Number.isNaN(num)) nextNum = num + 1;
       }
@@ -125,7 +102,7 @@ export function useAddWorker() {
         .single();
 
       if (error) throw error;
-      return data!.worker_id as string;
+      return (data as Record<string, unknown>)!.worker_id as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["workers"] }),
   });
@@ -149,16 +126,6 @@ export function useUpdateWorker() {
       pin: string;
       active: boolean;
     }) => {
-      if (!isSupabaseConfigured()) {
-        localWorkers.update(workerId, {
-          name,
-          mobile,
-          monthly_salary: monthlySalary,
-          pin,
-          active,
-        });
-        return;
-      }
       const { error } = await supabase
         .from("workers")
         .update({ name, mobile, monthly_salary: monthlySalary, pin, active })
@@ -173,10 +140,6 @@ export function useDeleteWorker() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (workerId: string) => {
-      if (!isSupabaseConfigured()) {
-        localWorkers.delete(workerId);
-        return;
-      }
       const { error } = await supabase
         .from("workers")
         .delete()
@@ -194,10 +157,6 @@ export function useChangeWorkerPin() {
       workerId,
       newPin,
     }: { workerId: string; newPin: string }) => {
-      if (!isSupabaseConfigured()) {
-        localWorkers.update(workerId, { pin: newPin });
-        return;
-      }
       const { error } = await supabase
         .from("workers")
         .update({ pin: newPin })
@@ -220,19 +179,12 @@ export function useChangeMyPin() {
       workerId?: string;
     }) => {
       const wid = workerId || getStoredWorkerId();
-      if (!isSupabaseConfigured()) {
-        const w = localWorkers.getById(wid);
-        if (!w || w.pin !== currentPin)
-          throw new Error("Current PIN is incorrect");
-        localWorkers.update(wid, { pin: newPin });
-        return;
-      }
       const { data } = await supabase
         .from("workers")
         .select("pin")
         .eq("worker_id", wid)
-        .single();
-      if (!data || data.pin !== currentPin)
+        .maybeSingle();
+      if (!data || (data as Record<string, unknown>).pin !== currentPin)
         throw new Error("Current PIN is incorrect");
       const { error } = await supabase
         .from("workers")
@@ -260,17 +212,6 @@ export function useMarkAttendance() {
       photo?: unknown;
     }) => {
       const today = getTodayString();
-      if (!isSupabaseConfigured()) {
-        const record = localAttendance.upsert({
-          worker_id: workerId,
-          date: today,
-          status,
-          latitude,
-          longitude,
-          marked_by: "worker",
-        });
-        return record.id as string;
-      }
       const { data: existing } = await supabase
         .from("attendance")
         .select("id")
@@ -285,7 +226,7 @@ export function useMarkAttendance() {
           .eq("worker_id", workerId)
           .eq("date", today);
         if (error) throw error;
-        return existing.id as string;
+        return (existing as Record<string, unknown>).id as string;
       }
       const { data, error } = await supabase
         .from("attendance")
@@ -300,7 +241,7 @@ export function useMarkAttendance() {
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["attendance"] });
@@ -316,10 +257,6 @@ export function useGetAttendanceByDate(workerId: string, date: string) {
     queryKey: ["attendance", workerId, date],
     queryFn: async () => {
       if (!workerId || !date) return null;
-      if (!isSupabaseConfigured()) {
-        const r = localAttendance.getByWorkerDate(workerId, date);
-        return r ? mapAttendance(r) : null;
-      }
       const { data } = await supabase
         .from("attendance")
         .select("*")
@@ -337,9 +274,6 @@ export function useGetAttendanceByWorker(workerId: string) {
     queryKey: ["attendanceByWorker", workerId],
     queryFn: async () => {
       if (!workerId) return [];
-      if (!isSupabaseConfigured()) {
-        return localAttendance.getByWorker(workerId).map(mapAttendance);
-      }
       const { data, error } = await supabase
         .from("attendance")
         .select("*")
@@ -365,11 +299,6 @@ export function useGetAttendanceByWorkerForMonth(
       if (!workerId) return [];
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = `${year}-${String(month).padStart(2, "0")}-31`;
-      if (!isSupabaseConfigured()) {
-        return localAttendance
-          .getByWorkerMonth(workerId, start, end)
-          .map(mapAttendance);
-      }
       const { data, error } = await supabase
         .from("attendance")
         .select("*")
@@ -398,9 +327,6 @@ export function useOwnerGetAttendanceForDate(date: string) {
     queryKey: ["ownerAttendanceDate", date],
     queryFn: async () => {
       if (!date) return [];
-      if (!isSupabaseConfigured()) {
-        return localAttendance.getByDate(date).map(mapAttendance);
-      }
       const { data, error } = await supabase
         .from("attendance")
         .select("*")
@@ -429,15 +355,6 @@ export function useOwnerAddAttendance() {
       date: string;
       status: AttendanceStatus | string;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const record = localAttendance.upsert({
-          worker_id: workerId,
-          date,
-          status,
-          marked_by: "owner",
-        });
-        return record.id as string;
-      }
       const { data: existing } = await supabase
         .from("attendance")
         .select("id")
@@ -452,7 +369,7 @@ export function useOwnerAddAttendance() {
           .eq("worker_id", workerId)
           .eq("date", date);
         if (error) throw error;
-        return existing.id as string;
+        return (existing as Record<string, unknown>).id as string;
       }
       const { data, error } = await supabase
         .from("attendance")
@@ -460,7 +377,7 @@ export function useOwnerAddAttendance() {
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["ownerAttendance"] });
@@ -479,10 +396,6 @@ export function useOwnerUpdateAttendance() {
       recordId,
       status,
     }: { recordId: string; status: AttendanceStatus | string }) => {
-      if (!isSupabaseConfigured()) {
-        localAttendance.updateById(recordId, { status, marked_by: "owner" });
-        return;
-      }
       const { error } = await supabase
         .from("attendance")
         .update({ status, marked_by: "owner" })
@@ -502,10 +415,6 @@ export function useOwnerDeleteAttendance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (recordId: string) => {
-      if (!isSupabaseConfigured()) {
-        localAttendance.deleteById(recordId);
-        return;
-      }
       const { error } = await supabase
         .from("attendance")
         .delete()
@@ -527,21 +436,6 @@ export function useGetDashboardStats() {
   return useQuery({
     queryKey: ["dashboardStats"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        const workers = localWorkers.getAll();
-        const todayAtt = localAttendance.getByDate(today);
-        const confirms = localConfirmations.getByDate(today);
-        return {
-          totalWorkers: BigInt(workers.length),
-          todayPresent: BigInt(
-            todayAtt.filter((r) => r.status === "present").length,
-          ),
-          todayAbsent: BigInt(
-            todayAtt.filter((r) => r.status === "absent").length,
-          ),
-          twoPMConfirmations: BigInt(confirms.length),
-        };
-      }
       const [workersRes, todayAttRes, confirmRes] = await Promise.all([
         supabase.from("workers").select("worker_id").neq("role", "owner"),
         supabase.from("attendance").select("status").eq("date", today),
@@ -551,10 +445,14 @@ export function useGetDashboardStats() {
         Array.isArray(workersRes.data) ? workersRes.data.length : 0,
       );
       const todayPresent = BigInt(
-        (todayAttRes.data || []).filter((r) => r.status === "present").length,
+        ((todayAttRes.data || []) as Record<string, unknown>[]).filter(
+          (r) => r.status === "present",
+        ).length,
       );
       const todayAbsent = BigInt(
-        (todayAttRes.data || []).filter((r) => r.status === "absent").length,
+        ((todayAttRes.data || []) as Record<string, unknown>[]).filter(
+          (r) => r.status === "absent",
+        ).length,
       );
       const twoPMConfirmations = BigInt(
         Array.isArray(confirmRes.data) ? confirmRes.data.length : 0,
@@ -569,31 +467,6 @@ export function useGetMonthlySummary(month: number, year: number) {
   return useQuery({
     queryKey: ["monthlySummary", month, year],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        const start = `${year}-${String(month).padStart(2, "0")}-01`;
-        const end = `${year}-${String(month).padStart(2, "0")}-31`;
-        const workers = localWorkers.getAll();
-        return workers.map((w) => {
-          const records = localAttendance.getByWorkerMonth(
-            w.worker_id as string,
-            start,
-            end,
-          );
-          return {
-            workerId: w.worker_id as string,
-            workerName: w.name as string,
-            presentDays: BigInt(
-              records.filter((r) => r.status === "present").length,
-            ),
-            absentDays: BigInt(
-              records.filter((r) => r.status === "absent").length,
-            ),
-            leaveDays: BigInt(
-              records.filter((r) => r.status === "leave").length,
-            ),
-          };
-        });
-      }
       const start = `${year}-${String(month).padStart(2, "0")}-01`;
       const end = `${year}-${String(month).padStart(2, "0")}-31`;
       const [workersRes, attRes] = await Promise.all([
@@ -604,8 +477,8 @@ export function useGetMonthlySummary(month: number, year: number) {
           .gte("date", start)
           .lte("date", end),
       ]);
-      const workers = workersRes.data || [];
-      const att = attRes.data || [];
+      const workers = (workersRes.data || []) as Record<string, unknown>[];
+      const att = (attRes.data || []) as Record<string, unknown>[];
       return workers.map((w) => {
         const records = att.filter((r) => r.worker_id === w.worker_id);
         return {
@@ -630,23 +503,13 @@ export function useConfirmTwoPM() {
   return useMutation({
     mutationFn: async (workerId: string) => {
       const today = getTodayString();
-      if (!isSupabaseConfigured()) {
-        const existing = localConfirmations.getByWorkerDate(workerId, today);
-        if (existing) return existing.id as string;
-        const record = localConfirmations.insert({
-          worker_id: workerId,
-          date: today,
-          confirmed: true,
-        });
-        return record.id as string;
-      }
       const { data: existing } = await supabase
         .from("confirmations")
         .select("id")
         .eq("worker_id", workerId)
         .eq("date", today)
         .maybeSingle();
-      if (existing) return existing.id as string;
+      if (existing) return (existing as Record<string, unknown>).id as string;
 
       const { data, error } = await supabase
         .from("confirmations")
@@ -654,7 +517,7 @@ export function useConfirmTwoPM() {
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["confirmations"] }),
   });
@@ -665,9 +528,6 @@ export function useGetConfirmationsByDate(date: string) {
     queryKey: ["confirmations", date],
     queryFn: async () => {
       if (!date) return [];
-      if (!isSupabaseConfigured()) {
-        return localConfirmations.getByDate(date).map(mapConfirmation);
-      }
       const { data, error } = await supabase
         .from("confirmations")
         .select("*")
@@ -684,10 +544,6 @@ export function useGetMyConfirmation(workerId: string, date: string) {
     queryKey: ["myConfirmation", workerId, date],
     queryFn: async () => {
       if (!workerId || !date) return null;
-      if (!isSupabaseConfigured()) {
-        const r = localConfirmations.getByWorkerDate(workerId, date);
-        return r ? mapConfirmation(r) : null;
-      }
       const { data } = await supabase
         .from("confirmations")
         .select("*")
@@ -705,9 +561,6 @@ export function useGetAllNotes() {
   return useQuery({
     queryKey: ["notes"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return localNotes.getAll().map(mapNote);
-      }
       const { data, error } = await supabase
         .from("notes")
         .select("*")
@@ -723,15 +576,6 @@ export function useGetMyNotes() {
   return useQuery({
     queryKey: ["myNotes", workerId],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        const allNotes = localNotes.getAll();
-        const filtered = allNotes.filter(
-          (n: Record<string, unknown>) =>
-            n.worker_id === workerId || n.note_type === "ownerInstruction",
-        );
-        return filtered.map(mapNote);
-      }
-      // Two separate queries then merge (supabase client doesn't support OR filter)
       const [ownRes, instrRes] = await Promise.all([
         supabase
           .from("notes")
@@ -745,15 +589,18 @@ export function useGetMyNotes() {
           .order("created_at", { ascending: false }),
       ]);
       if (ownRes.error) throw ownRes.error;
-      const combined = [...(ownRes.data || []), ...(instrRes.data || [])];
+      const combined = [
+        ...((ownRes.data || []) as Record<string, unknown>[]),
+        ...((instrRes.data || []) as Record<string, unknown>[]),
+      ];
       const seen = new Set<string>();
-      const unique = combined.filter((n: Record<string, unknown>) => {
-        const id = (n.id || n.note_id) as string;
+      const unique = combined.filter((n) => {
+        const id = ((n.id || n.note_id) as string) || "";
         if (seen.has(id)) return false;
         seen.add(id);
         return true;
       });
-      unique.sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
+      unique.sort((a, b) =>
         ((b.created_at as string) || "").localeCompare(
           (a.created_at as string) || "",
         ),
@@ -768,9 +615,6 @@ export function useGetNotesByWorker(workerId: string) {
     queryKey: ["notesByWorker", workerId],
     queryFn: async () => {
       if (!workerId) return [];
-      if (!isSupabaseConfigured()) {
-        return localNotes.getByWorker(workerId).map(mapNote);
-      }
       const { data, error } = await supabase
         .from("notes")
         .select("*")
@@ -804,17 +648,6 @@ export function useAddNote() {
           ? photoUrl.getDirectURL()
           : null;
       const by = createdBy || getStoredWorkerId() || "";
-
-      if (!isSupabaseConfigured()) {
-        const record = localNotes.insert({
-          worker_id: workerId || null,
-          note_type: noteType,
-          content,
-          photo_url: photoUrlStr,
-          created_by: by,
-        });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("notes")
         .insert({
@@ -827,7 +660,7 @@ export function useAddNote() {
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["notes"] });
@@ -852,11 +685,6 @@ export function useUpdateNote() {
         photoUrl && typeof photoUrl.getDirectURL === "function"
           ? photoUrl.getDirectURL()
           : null;
-
-      if (!isSupabaseConfigured()) {
-        localNotes.update(noteId, { content, photo_url: photoUrlStr });
-        return;
-      }
       const { error } = await supabase
         .from("notes")
         .update({
@@ -878,10 +706,6 @@ export function useDeleteNote() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (noteId: string) => {
-      if (!isSupabaseConfigured()) {
-        localNotes.delete(noteId);
-        return;
-      }
       const { error } = await supabase.from("notes").delete().eq("id", noteId);
       if (error) throw error;
     },
@@ -902,10 +726,6 @@ export function useGetSalaryRecord(
     queryKey: ["salary", workerId, month, year],
     queryFn: async () => {
       if (!workerId) return null;
-      if (!isSupabaseConfigured()) {
-        const r = localSalary.get(workerId, month, year);
-        return r ? mapSalary(r) : null;
-      }
       const { data } = await supabase
         .from("salary_records")
         .select("*")
@@ -934,21 +754,6 @@ export function useAddSalaryRecord() {
       carryForward: number;
       companyHolidays: number;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const record = localSalary.insert({
-          worker_id: params.workerId,
-          month: params.month,
-          year: params.year,
-          monthly_salary: params.monthlySalary,
-          present_days: params.presentDays,
-          absent_days: params.absentDays,
-          cut_days: params.cutDays,
-          advance_amount: params.advanceAmount,
-          carry_forward: params.carryForward,
-          company_holidays: params.companyHolidays,
-        });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("salary_records")
         .insert({
@@ -966,7 +771,7 @@ export function useAddSalaryRecord() {
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["salary"] }),
   });
@@ -987,20 +792,6 @@ export function useUpdateSalaryRecord() {
       manualOverride: boolean;
       overrideNetPay: number | null;
     }) => {
-      if (!isSupabaseConfigured()) {
-        localSalary.update(params.salaryId, {
-          monthly_salary: params.monthlySalary,
-          present_days: params.presentDays,
-          absent_days: params.absentDays,
-          cut_days: params.cutDays,
-          advance_amount: params.advanceAmount,
-          carry_forward: params.carryForward,
-          company_holidays: params.companyHolidays,
-          manual_override: params.manualOverride,
-          override_net_pay: params.overrideNetPay,
-        });
-        return;
-      }
       const { error } = await supabase
         .from("salary_records")
         .update({
@@ -1026,9 +817,6 @@ export function useGetAllHolidays() {
   return useQuery({
     queryKey: ["holidays"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return localHolidays.getAll().map(mapHoliday);
-      }
       const { data, error } = await supabase
         .from("holidays")
         .select("*")
@@ -1047,17 +835,13 @@ export function useAddHoliday() {
       name,
       description,
     }: { date: string; name: string; description: string | null }) => {
-      if (!isSupabaseConfigured()) {
-        const record = localHolidays.insert({ date, name, description });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("holidays")
         .insert({ date, name, description })
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["holidays"] }),
   });
@@ -1077,10 +861,6 @@ export function useEditHoliday() {
       name: string;
       description: string | null;
     }) => {
-      if (!isSupabaseConfigured()) {
-        localHolidays.update(holidayId, { date, name, description });
-        return;
-      }
       const { error } = await supabase
         .from("holidays")
         .update({ date, name, description })
@@ -1095,10 +875,6 @@ export function useDeleteHoliday() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (holidayId: string) => {
-      if (!isSupabaseConfigured()) {
-        localHolidays.delete(holidayId);
-        return;
-      }
       const { error } = await supabase
         .from("holidays")
         .delete()
@@ -1114,9 +890,6 @@ export function useGetAllAnnouncements() {
   return useQuery({
     queryKey: ["announcements"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return localAnnouncements.getAll().map(mapAnnouncement);
-      }
       const { data, error } = await supabase
         .from("announcements")
         .select("*")
@@ -1134,17 +907,13 @@ export function useAddAnnouncement() {
       title,
       content,
     }: { title: string; content: string }) => {
-      if (!isSupabaseConfigured()) {
-        const record = localAnnouncements.insert({ title, content });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("announcements")
         .insert({ title, content })
         .select()
         .single();
       if (error) throw error;
-      return data!.id as string;
+      return (data as Record<string, unknown>)!.id as string;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["announcements"] }),
   });
@@ -1158,10 +927,6 @@ export function useUpdateAnnouncement() {
       title,
       content,
     }: { announcementId: string; title: string; content: string }) => {
-      if (!isSupabaseConfigured()) {
-        localAnnouncements.update(announcementId, { title, content });
-        return;
-      }
       const { error } = await supabase
         .from("announcements")
         .update({ title, content })
@@ -1176,10 +941,6 @@ export function useDeleteAnnouncement() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (announcementId: string) => {
-      if (!isSupabaseConfigured()) {
-        localAnnouncements.delete(announcementId);
-        return;
-      }
       const { error } = await supabase
         .from("announcements")
         .delete()
@@ -1194,7 +955,7 @@ export function useDeleteAnnouncement() {
 export function useRegisterOwner() {
   return useMutation({
     mutationFn: async () => {
-      /* Owner exists in DB */
+      /* Owner exists in DB — no-op */
     },
   });
 }
@@ -1203,9 +964,6 @@ export function useGetOwnerStatus() {
   return useQuery({
     queryKey: ["ownerStatus"],
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return { ownerRegistered: true, isOwner: true };
-      }
       const { data } = await supabase
         .from("workers")
         .select("worker_id")
@@ -1237,6 +995,19 @@ export interface AdvanceEntry {
   createdAt: string;
 }
 
+function mapAdvanceEntry(row: Record<string, unknown>): AdvanceEntry {
+  return {
+    id: row.id as string,
+    workerId: row.worker_id as string,
+    month: row.month as number,
+    year: row.year as number,
+    amount: Number(row.amount) || 0,
+    entryDate: row.entry_date as string,
+    entryTime: (row.entry_time as string) || "00:00",
+    createdAt: (row.created_at as string) || new Date().toISOString(),
+  };
+}
+
 export function useGetAdvanceEntries(
   workerId: string,
   month: number,
@@ -1246,14 +1017,6 @@ export function useGetAdvanceEntries(
     queryKey: ["advanceEntries", workerId, month, year],
     queryFn: async () => {
       if (!workerId) return [];
-      if (!isSupabaseConfigured()) {
-        const { localAdvanceEntries } = await import("../lib/localDb");
-        const { mapAdvanceEntry } = await import("../lib/supabase");
-        return localAdvanceEntries
-          .getByWorkerMonth(workerId, month, year)
-          .map(mapAdvanceEntry);
-      }
-      const { mapAdvanceEntry } = await import("../lib/supabase");
       const { data, error } = await supabase
         .from("advance_entries")
         .select("*")
@@ -1261,7 +1024,10 @@ export function useGetAdvanceEntries(
         .eq("month", month)
         .eq("year", year)
         .order("entry_date");
-      if (error) throw error;
+      if (error) {
+        console.error("useGetAdvanceEntries error:", error.code, error.message);
+        return [];
+      }
       return (data || []).map(mapAdvanceEntry);
     },
     enabled: !!workerId,
@@ -1286,18 +1052,6 @@ export function useAddAdvanceEntry() {
       entryDate: string;
       entryTime: string;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const { localAdvanceEntries } = await import("../lib/localDb");
-        const record = localAdvanceEntries.insert({
-          worker_id: workerId,
-          month,
-          year,
-          amount,
-          entry_date: entryDate,
-          entry_time: entryTime,
-        });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("advance_entries")
         .insert({
@@ -1335,11 +1089,6 @@ export function useDeleteAdvanceEntry() {
       month: number;
       year: number;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const { localAdvanceEntries } = await import("../lib/localDb");
-        localAdvanceEntries.deleteById(id);
-        return;
-      }
       const { error } = await supabase
         .from("advance_entries")
         .delete()
@@ -1367,6 +1116,19 @@ export interface CarryForwardEntry {
   createdAt: string;
 }
 
+function mapCarryForwardEntry(row: Record<string, unknown>): CarryForwardEntry {
+  return {
+    id: row.id as string,
+    workerId: row.worker_id as string,
+    month: row.month as number,
+    year: row.year as number,
+    amount: Number(row.amount) || 0,
+    entryDate: row.entry_date as string,
+    entryTime: (row.entry_time as string) || "00:00",
+    createdAt: (row.created_at as string) || new Date().toISOString(),
+  };
+}
+
 export function useGetCarryForwardEntries(
   workerId: string,
   month: number,
@@ -1376,14 +1138,6 @@ export function useGetCarryForwardEntries(
     queryKey: ["carryForwardEntries", workerId, month, year],
     queryFn: async () => {
       if (!workerId) return [];
-      if (!isSupabaseConfigured()) {
-        const { localCarryForwardEntries } = await import("../lib/localDb");
-        const { mapCarryForwardEntry } = await import("../lib/supabase");
-        return localCarryForwardEntries
-          .getByWorkerMonth(workerId, month, year)
-          .map(mapCarryForwardEntry);
-      }
-      const { mapCarryForwardEntry } = await import("../lib/supabase");
       const { data, error } = await supabase
         .from("carry_forward_entries")
         .select("*")
@@ -1391,7 +1145,14 @@ export function useGetCarryForwardEntries(
         .eq("month", month)
         .eq("year", year)
         .order("entry_date");
-      if (error) throw error;
+      if (error) {
+        console.error(
+          "useGetCarryForwardEntries error:",
+          error.code,
+          error.message,
+        );
+        return [];
+      }
       return (data || []).map(mapCarryForwardEntry);
     },
     enabled: !!workerId,
@@ -1416,18 +1177,6 @@ export function useAddCarryForwardEntry() {
       entryDate: string;
       entryTime: string;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const { localCarryForwardEntries } = await import("../lib/localDb");
-        const record = localCarryForwardEntries.insert({
-          worker_id: workerId,
-          month,
-          year,
-          amount,
-          entry_date: entryDate,
-          entry_time: entryTime,
-        });
-        return record.id as string;
-      }
       const { data, error } = await supabase
         .from("carry_forward_entries")
         .insert({
@@ -1465,11 +1214,6 @@ export function useDeleteCarryForwardEntry() {
       month: number;
       year: number;
     }) => {
-      if (!isSupabaseConfigured()) {
-        const { localCarryForwardEntries } = await import("../lib/localDb");
-        localCarryForwardEntries.deleteById(id);
-        return;
-      }
       const { error } = await supabase
         .from("carry_forward_entries")
         .delete()
@@ -1492,7 +1236,7 @@ export interface EveningLocation {
   date: string;
   latitude: number;
   longitude: number;
-  capturedAt: string; // ISO timestamp
+  capturedAt: string;
   createdAt: string;
 }
 
@@ -1518,10 +1262,6 @@ export function useGetEveningLocationsByDate(date: string) {
     queryKey: ["eveningLocations", date],
     queryFn: async () => {
       if (!date) return [];
-      if (!isSupabaseConfigured()) {
-        const { localEveningLocations } = await import("../lib/localDb");
-        return localEveningLocations.getByDate(date).map(mapEveningLocation);
-      }
       const { data, error } = await supabase
         .from("evening_locations")
         .select("*")
@@ -1550,18 +1290,6 @@ export function useSaveEveningLocation() {
       longitude: number;
     }) => {
       const capturedAt = new Date().toISOString();
-      if (!isSupabaseConfigured()) {
-        const { localEveningLocations } = await import("../lib/localDb");
-        const record = localEveningLocations.upsert({
-          worker_id: workerId,
-          date,
-          latitude,
-          longitude,
-          captured_at: capturedAt,
-        });
-        return record.id as string;
-      }
-      // Upsert: one record per worker per day
       const { data: existing } = await supabase
         .from("evening_locations")
         .select("id")

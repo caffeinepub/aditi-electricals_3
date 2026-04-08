@@ -1,8 +1,8 @@
 import { AlertCircle, Camera, Image, Loader2, X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { ExternalBlob, type Note } from "../../backend";
 import { useUpdateNote } from "../../hooks/useQueries";
+import { ExternalBlob, type Note } from "../../types/appTypes";
 
 interface EditNoteModalProps {
   note: Note;

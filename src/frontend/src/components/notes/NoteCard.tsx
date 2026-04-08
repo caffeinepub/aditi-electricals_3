@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { type Note, NoteType } from "../../backend";
+import { type Note, NoteType } from "../../types/appTypes";
 import { formatTimestamp } from "../../utils/dateUtils";
 
 interface NoteCardProps {

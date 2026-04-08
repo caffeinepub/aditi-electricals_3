@@ -1,5 +1,5 @@
 import React from "react";
-import type { SalaryRecord } from "../../backend";
+import type { SalaryRecord } from "../../types/appTypes";
 
 interface SalaryBreakdownCardProps {
   record: SalaryRecord;

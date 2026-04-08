@@ -109,9 +109,6 @@ export interface UserProfile {
   'name' : string,
   'role' : string,
 }
-export type UserRole = { 'admin' : null } |
-  { 'user' : null } |
-  { 'guest' : null };
 export interface Worker {
   'pin' : string,
   'workerId' : WorkerId,
@@ -121,34 +118,7 @@ export interface Worker {
   'mobile' : string,
 }
 export type WorkerId = string;
-export interface _CaffeineStorageCreateCertificateResult {
-  'method' : string,
-  'blob_hash' : string,
-}
-export interface _CaffeineStorageRefillInformation {
-  'proposed_top_up_amount' : [] | [bigint],
-}
-export interface _CaffeineStorageRefillResult {
-  'success' : [] | [boolean],
-  'topped_up_amount' : [] | [bigint],
-}
 export interface _SERVICE {
-  '_caffeineStorageBlobIsLive' : ActorMethod<[Uint8Array], boolean>,
-  '_caffeineStorageBlobsToDelete' : ActorMethod<[], Array<Uint8Array>>,
-  '_caffeineStorageConfirmBlobDeletion' : ActorMethod<
-    [Array<Uint8Array>],
-    undefined
-  >,
-  '_caffeineStorageCreateCertificate' : ActorMethod<
-    [string],
-    _CaffeineStorageCreateCertificateResult
-  >,
-  '_caffeineStorageRefillCashier' : ActorMethod<
-    [[] | [_CaffeineStorageRefillInformation]],
-    _CaffeineStorageRefillResult
-  >,
-  '_caffeineStorageUpdateGatewayPrincipals' : ActorMethod<[], undefined>,
-  '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'addAnnouncement' : ActorMethod<[string, string], AnnouncementId>,
   'addHoliday' : ActorMethod<[string, string, [] | [string]], HolidayId>,
   'addNote' : ActorMethod<
@@ -171,7 +141,6 @@ export interface _SERVICE {
     SalaryId
   >,
   'addWorker' : ActorMethod<[string, string, bigint], WorkerId>,
-  'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'changeMyPin' : ActorMethod<[string, string], undefined>,
   'changeWorkerPin' : ActorMethod<[WorkerId, string], undefined>,
   'confirmTwoPM' : ActorMethod<[WorkerId], ConfirmationId>,
@@ -206,7 +175,6 @@ export interface _SERVICE {
     Array<AttendanceRecordPublic>
   >,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
-  'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getConfirmationsByDate' : ActorMethod<[string], Array<TwoPMConfirmation>>,
   'getDashboardStats' : ActorMethod<[], DashboardStats>,
   'getMonthlySummary' : ActorMethod<
@@ -230,7 +198,6 @@ export interface _SERVICE {
   >,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'getWorker' : ActorMethod<[WorkerId], Worker>,
-  'isCallerAdmin' : ActorMethod<[], boolean>,
   'linkWorkerPrincipal' : ActorMethod<[WorkerId], undefined>,
   'markAttendance' : ActorMethod<
     [

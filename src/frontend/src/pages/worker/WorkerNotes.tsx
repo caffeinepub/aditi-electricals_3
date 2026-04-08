@@ -1,11 +1,11 @@
 import { AlertCircle, FileText, Loader2, Plus } from "lucide-react";
 import React, { useState, useMemo } from "react";
-import { type Note, NoteType } from "../../backend";
 import AddNoteModal from "../../components/notes/AddNoteModal";
 import EditNoteModal from "../../components/notes/EditNoteModal";
 import NoteCard from "../../components/notes/NoteCard";
 import { useAuth } from "../../contexts/AuthContext";
 import { useDeleteNote, useGetMyNotes } from "../../hooks/useQueries";
+import { type Note, NoteType } from "../../types/appTypes";
 
 type TabType = "all" | "work" | "material" | "ownerInstruction";
 

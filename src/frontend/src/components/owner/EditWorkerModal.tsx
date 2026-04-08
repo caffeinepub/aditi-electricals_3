@@ -1,8 +1,8 @@
 import { X } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import type { Worker } from "../../backend";
 import { useUpdateWorker } from "../../hooks/useQueries";
+import type { Worker } from "../../types/appTypes";
 
 interface EditWorkerModalProps {
   worker: Worker;

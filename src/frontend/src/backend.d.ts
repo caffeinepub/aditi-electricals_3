@@ -14,6 +14,16 @@ export class ExternalBlob {
     static fromBytes(blob: Uint8Array<ArrayBuffer>): ExternalBlob;
     withUploadProgress(onProgress: (percentage: number) => void): ExternalBlob;
 }
+export interface Note {
+    workerId: WorkerId;
+    content: string;
+    noteId: NoteId;
+    createdAt: Time;
+    createdBy: string;
+    noteType: NoteType;
+    photoUrl?: ExternalBlob;
+    updatedAt?: Time;
+}
 export interface SalaryRecord {
     month: bigint;
     workerId: WorkerId;
@@ -39,6 +49,7 @@ export interface MonthlySummaryEntry {
     workerName: string;
 }
 export type SalaryId = string;
+export type ConfirmationId = string;
 export interface TwoPMConfirmation {
     workerId: WorkerId;
     confirmationId: ConfirmationId;
@@ -46,14 +57,6 @@ export interface TwoPMConfirmation {
     confirmedAt?: Time;
     confirmed: boolean;
 }
-export type HolidayId = string;
-export interface DashboardStats {
-    todayAbsent: bigint;
-    totalWorkers: bigint;
-    todayPresent: bigint;
-    twoPMConfirmations: bigint;
-}
-export type ConfirmationId = string;
 export interface AttendanceRecordPublic {
     status: AttendanceStatus;
     workerId: WorkerId;
@@ -64,6 +67,12 @@ export interface AttendanceRecordPublic {
     photo?: ExternalBlob;
 }
 export type AttendanceId = string;
+export interface DashboardStats {
+    todayAbsent: bigint;
+    totalWorkers: bigint;
+    todayPresent: bigint;
+    twoPMConfirmations: bigint;
+}
 export interface Announcement {
     title: string;
     content: string;
@@ -103,16 +112,7 @@ export interface UserProfile {
     name: string;
     role: string;
 }
-export interface Note {
-    workerId: WorkerId;
-    content: string;
-    noteId: NoteId;
-    createdAt: Time;
-    createdBy: string;
-    noteType: NoteType;
-    photoUrl?: ExternalBlob;
-    updatedAt?: Time;
-}
+export type HolidayId = string;
 export enum AttendanceStatus {
     present = "present",
     leave = "leave",
@@ -125,18 +125,12 @@ export enum NoteType {
     ownerInstruction = "ownerInstruction",
     material = "material"
 }
-export enum UserRole {
-    admin = "admin",
-    user = "user",
-    guest = "guest"
-}
 export interface backendInterface {
     addAnnouncement(title: string, content: string): Promise<AnnouncementId>;
     addHoliday(date: string, name: string, description: string | null): Promise<HolidayId>;
     addNote(workerId: WorkerId, noteType: NoteType, content: string, photoUrl: ExternalBlob | null): Promise<NoteId>;
     addSalaryRecord(workerId: WorkerId, month: bigint, year: bigint, monthlySalary: bigint, presentDays: bigint, absentDays: bigint, cutDays: bigint, advanceAmount: bigint, carryForward: bigint, companyHolidays: bigint): Promise<SalaryId>;
     addWorker(name: string, mobile: string, monthlySalary: bigint): Promise<WorkerId>;
-    assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     changeMyPin(currentPin: string, newPin: string): Promise<void>;
     changeWorkerPin(workerId: WorkerId, newPin: string): Promise<void>;
     confirmTwoPM(workerId: WorkerId): Promise<ConfirmationId>;
@@ -156,7 +150,6 @@ export interface backendInterface {
     getAttendanceByWorker(workerId: WorkerId): Promise<Array<AttendanceRecordPublic>>;
     getAttendanceByWorkerForMonth(workerId: WorkerId, month: bigint, year: bigint): Promise<Array<AttendanceRecordPublic>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
-    getCallerUserRole(): Promise<UserRole>;
     getConfirmationsByDate(date: string): Promise<Array<TwoPMConfirmation>>;
     getDashboardStats(): Promise<DashboardStats>;
     getMonthlySummary(month: bigint, year: bigint): Promise<Array<MonthlySummaryEntry>>;
@@ -171,7 +164,6 @@ export interface backendInterface {
     getSalaryRecord(workerId: WorkerId, month: bigint, year: bigint): Promise<SalaryRecord | null>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     getWorker(workerId: WorkerId): Promise<Worker>;
-    isCallerAdmin(): Promise<boolean>;
     linkWorkerPrincipal(workerId: WorkerId): Promise<void>;
     markAttendance(workerId: WorkerId, status: AttendanceStatus, latitude: number | null, longitude: number | null, photo: ExternalBlob | null): Promise<AttendanceId>;
     ownerAddAttendance(workerId: WorkerId, date: string, status: AttendanceStatus): Promise<AttendanceId>;

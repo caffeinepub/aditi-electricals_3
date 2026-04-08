@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import type { Worker } from "../../backend";
 import type { EveningLocation } from "../../hooks/useQueries";
+import type { Worker } from "../../types/appTypes";
 
 interface EveningWithWorker {
   location: EveningLocation;

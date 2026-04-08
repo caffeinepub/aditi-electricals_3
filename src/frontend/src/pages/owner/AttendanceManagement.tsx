@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
-import { type AttendanceRecord, AttendanceStatus } from "../../backend";
 import AttendanceCalendar from "../../components/AttendanceCalendar";
 import EveningLocationsMap from "../../components/owner/EveningLocationsMap";
 import {
@@ -21,6 +20,7 @@ import {
   useOwnerGetAttendanceByWorkerForMonth,
   useOwnerUpdateAttendance,
 } from "../../hooks/useQueries";
+import { type AttendanceRecord, AttendanceStatus } from "../../types/appTypes";
 import {
   getCurrentMonthYear,
   getMonthName,

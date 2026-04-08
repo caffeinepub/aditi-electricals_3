@@ -1,0 +1,156 @@
+// Version: 1.0.0
+type AnnouncementId__114497973 = Text;
+type Announcement__674333181 =
+  {
+    announcementId : AnnouncementId__114497973;
+    content : Text;
+    createdAt : Time__900049286;
+    title : Text
+  };
+type AttendanceId__22249911 = Text;
+type AttendanceRecord__852829031 =
+  {
+    date : Text;
+    latitude : ?Float;
+    longitude : ?Float;
+    markedBy : Text;
+    photo : ?ExternalBlob__21263849;
+    recordId : AttendanceId__22249911;
+    status : AttendanceStatus__244828072;
+    timestamp : Time__900049286;
+    workerId : WorkerId__357008907
+  };
+type AttendanceStatus__244828072 = {#absent; #holiday; #leave; #present};
+type ConfirmationId__232669254 = Text;
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type ExternalBlob__21263849 = Blob;
+type HolidayId__312557816 = Text;
+type Holiday__491596039 =
+  {
+    createdAt : Time__900049286;
+    date : Text;
+    description : ?Text;
+    holidayId : HolidayId__312557816;
+    name : Text
+  };
+type Int__270357528 = Int__616954475;
+type Int__616954475 = Int;
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type NoteId__491897279 = Text;
+type NoteType__610236806 = {#material; #ownerInstruction; #perWorker; #work};
+type Note__74666102 =
+  {
+    content : Text;
+    createdAt : Time__900049286;
+    createdBy : Text;
+    noteId : NoteId__491897279;
+    noteType : NoteType__610236806;
+    photoUrl : ?ExternalBlob__21263849;
+    updatedAt : ?Time__900049286;
+    workerId : WorkerId__357008907
+  };
+type SalaryId__848141381 = Text;
+type SalaryRecord__162271539 =
+  {
+    absentDays : Nat;
+    advanceAmount : Nat;
+    carryForward : Int;
+    companyHolidays : Nat;
+    cutDays : Nat;
+    manualOverride : Bool;
+    month : Nat;
+    monthlySalary : Nat;
+    netPay : Int;
+    presentDays : Nat;
+    salaryId : SalaryId__848141381;
+    workerId : WorkerId__357008907;
+    year : Nat
+  };
+type Time__796480547 = Int__270357528;
+type Time__900049286 = Time__796480547;
+type TwoPMConfirmation__907870192 =
+  {
+    confirmationId : ConfirmationId__232669254;
+    confirmed : Bool;
+    confirmedAt : ?Time__900049286;
+    date : Text;
+    workerId : WorkerId__357008907
+  };
+type UserProfile__491224006 = {name : Text; role : Text; workerId : ?Text};
+type UserRole__599675725 = {#admin; #guest; #user};
+type WorkerId__357008907 = Text;
+type Worker__19188654 =
+  {
+    active : Bool;
+    mobile : Text;
+    monthlySalary : Nat;
+    name : Text;
+    pin : Text;
+    workerId : WorkerId__357008907
+  };
+actor {
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__599675725>
+    };
+  stable var announcementCounter : Nat;
+  stable announcements :
+    {
+      var root :
+        Node__46230540<AnnouncementId__114497973, Announcement__674333181>;
+      var size : Nat__490723111
+    };
+  stable attendanceRecords :
+    {
+      var root :
+        Node__46230540<AttendanceId__22249911, AttendanceRecord__852829031>;
+      var size : Nat__490723111
+    };
+  stable confirmations :
+    {
+      var root :
+        Node__46230540<ConfirmationId__232669254,
+                        TwoPMConfirmation__907870192>;
+      var size : Nat__490723111
+    };
+  stable var holidayCounter : Nat;
+  stable holidays :
+    {
+      var root : Node__46230540<HolidayId__312557816, Holiday__491596039>;
+      var size : Nat__490723111
+    };
+  stable notes :
+    {
+      var root : Node__46230540<NoteId__491897279, Note__74666102>;
+      var size : Nat__490723111
+    };
+  stable var owner : ?Principal;
+  stable salaryRecords :
+    {
+      var root : Node__46230540<SalaryId__848141381, SalaryRecord__162271539>;
+      var size : Nat__490723111
+    };
+  stable userProfiles :
+    {
+      var root : Node__46230540<Principal, UserProfile__491224006>;
+      var size : Nat__490723111
+    };
+  stable var workerCounter : Nat;
+  stable workers :
+    {
+      var root : Node__46230540<WorkerId__357008907, Worker__19188654>;
+      var size : Nat__490723111
+    }
+};

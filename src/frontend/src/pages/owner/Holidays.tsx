@@ -1,6 +1,5 @@
 import type React from "react";
 import { useState } from "react";
-import type { Holiday } from "../../backend";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   useAddHoliday,
@@ -8,6 +7,7 @@ import {
   useEditHoliday,
   useGetAllHolidays,
 } from "../../hooks/useQueries";
+import type { Holiday } from "../../types/appTypes";
 import { formatDate } from "../../utils/dateUtils";
 
 export default function Holidays() {

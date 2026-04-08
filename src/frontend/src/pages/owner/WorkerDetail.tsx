@@ -20,7 +20,6 @@ import {
   Phone,
 } from "lucide-react";
 import React, { useState } from "react";
-import { type AttendanceRecord, AttendanceStatus } from "../../backend";
 import AttendanceCalendar from "../../components/AttendanceCalendar";
 import NoteCard from "../../components/notes/NoteCard";
 import { useGetAllNotes, useGetWorker } from "../../hooks/useQueries";
@@ -28,6 +27,7 @@ import {
   useGetAllHolidays,
   useOwnerGetAttendanceByWorkerForMonth,
 } from "../../hooks/useQueries";
+import { type AttendanceRecord, AttendanceStatus } from "../../types/appTypes";
 import { getCurrentMonthYear, getMonthName } from "../../utils/dateUtils";
 import SalaryWorkerView from "./SalaryWorkerView";
 
